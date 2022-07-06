@@ -42,14 +42,16 @@ def main():
                         extract_step=patches_params['extract_step'],
                         pad_before_ext=patches_params['pad_before_ext'],
                         pad_value=patches_params['pad_value'],
-                        save_dtype=config['generate_dataset']['save_dtype'])
+                        save_dtype=config['generate_dataset']['save_dtype'],
+                        workers=config['workers'])
         extract_patches(y_slices_pp, 'y',
                         save_path=config['data_folder'],
                         patch_size=patches_params['patch_size'],
                         extract_step=patches_params['extract_step'],
                         pad_before_ext=patches_params['pad_before_ext'],
                         pad_value=patches_params['pad_value'],
-                        save_dtype=config['generate_dataset']['save_dtype'])
+                        save_dtype=config['generate_dataset']['save_dtype'],
+                        workers=config['workers'])
 
     else:
         print('Saving slices...')

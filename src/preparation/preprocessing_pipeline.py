@@ -36,9 +36,6 @@ def gen_pipeline(steps):
             elif step == 'white_noise':
                 pipeline.append( (white_noise, step) )
 
-            elif step == 'extract_patches':
-                pipeline.append( (extract_patches, step) )
-
             elif step == 'random_xy_flip':
                 pipeline.append( (random_xy_flip, step) )
 

@@ -54,6 +54,7 @@ predict_test:
         pad_square:
             pad_value: -0.5
         
+workers: 32
 gpus_to_use:
 - /GPU:0
 - /GPU:1

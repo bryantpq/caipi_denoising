@@ -13,7 +13,8 @@ def extract_patches(data,
                     extract_step=(1, 1), 
                     pad_before_ext=True, 
                     pad_value=0.0,
-                    save_dtype='float16'):
+                    save_dtype='float16',
+                    workers=32):
     
     size_x, size_y = patch_size
     step_x, step_y = extract_step
@@ -45,7 +46,7 @@ def extract_patches(data,
                                                        len(indices) * patch_size[0] * patch_size[1] * 2))
     print()
     
-    pool = mp.Pool(32)
+    pool = mp.Pool(workers)
     processes = []
     for ii, slc in enumerate(data):
         slc_ = slc[:,:,0]
