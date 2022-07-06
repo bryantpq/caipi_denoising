@@ -40,6 +40,7 @@ train_network:
     batch_size: 32
     
 predict_test:
+    train_or_test_set: 'test'
     model_type: 0
     load_model_path: '/home/quahb/caipi_denoising/models/2022-06-22/denoiser_ep06.h5'
     extract_patches: False

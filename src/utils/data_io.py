@@ -56,7 +56,7 @@ def write_patches(slc_i,
 def load_patches(X_OR_Y, folder_path):
     
     files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
-    print('Found {} files to load at {}'.format(len(files), folder_path))
+    print('    Found {} files to load at {}'.format(len(files), folder_path))
     
     pool = mp.Pool(32)
     processes = []
@@ -70,12 +70,12 @@ def load_patches(X_OR_Y, folder_path):
     results = np.vstack(results)
     
     print('Loading patches complete.')
-    print('    Dataset size: {}'.format(results.shape))
+    print('    Dataset shape: {}'.format(results.shape))
     
     return results
 
 
 def create_folders(path):
     if not os.path.exists(path):
-        os.makedirs(path)
+        os.makedirs(path, exist_ok=True)
         print("Creating new folder dataset: {}".format(path))

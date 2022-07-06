@@ -17,7 +17,10 @@ def main():
     
     print(config)
     print()
-    print('Gathering all slices...')
+    if config['generate_dataset']['median_slices']:
+        print('Gathering median slices...')
+    else:
+        print('Gathering all slices...')
     X_slices, y_slices = get_train_data(median_slices=config['generate_dataset']['median_slices'])
     print('X_slices.shape: {}, y_slices.shape: {}'.format(X_slices.shape, y_slices.shape))
     

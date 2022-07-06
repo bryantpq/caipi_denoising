@@ -5,7 +5,7 @@ import tensorflow as tf
 import yaml
 
 from modeling.get_model import get_model
-from preparation.gen_data import get_test_data
+from preparation.gen_data import get_test_data, get_train_data
 from preparation.prepare_tf_dataset import np_to_tfdataset
 from preparation.preprocessing_pipeline import preprocess_slices
 from utils.data_io import write_slices
@@ -23,8 +23,14 @@ def main():
 
     print(config)
     print()
-    print('Loading testing data...')
-    X_test, test_paths = get_test_data()
+
+    if config['predict_test']['train_or_test_set'] == 'test':
+        print('Loading testing data...')
+        X_test, test_paths = get_test_data()
+    elif config['predict_test']['train_or_test_set'] == 'train': 
+        print('Loading training data...')
+        X_test, _ = get_train_data()
+        del _
     
     if config['predict_test']['shuffle']:
         print('Shuffling slices for prediction...')

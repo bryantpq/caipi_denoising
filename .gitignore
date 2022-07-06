@@ -1,4 +1,5 @@
 # CAIPI Denoising
+*.swp
 data
 models/
 src/configs/*

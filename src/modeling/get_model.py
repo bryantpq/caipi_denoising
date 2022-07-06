@@ -15,7 +15,7 @@ def get_model(model_type, input_shape=None, load_model_path=None):
     
     if model_type == 0:
         print('    Using model type 0')
-        model = Denoiser(input_shape=img_size)
+        model = Denoiser(input_shape=img_size).model
         
     elif model_type == 1:
         print('    Using model type 1')
@@ -85,7 +85,7 @@ class Denoiser(Model):
 def get_denoiser(input_shape):
     enc_input  = Input(shape=input_shape, dtype=tf.float32)
 
-    enc_block1 = layers.Conv2D(256, (3, 3), padding='same', strides=1, name='test')(enc_input)
+    enc_block1 = layers.Conv2D(256, (3, 3), padding='same', strides=1)(enc_input)
     enc_block1 = layers.BatchNormalization()(enc_block1)
     enc_block1 = layers.Activation('relu')(enc_block1)
     enc_block1 = layers.MaxPool2D(pool_size=(2, 2))(enc_block1)
