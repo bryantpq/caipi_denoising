@@ -13,9 +13,6 @@ from utils.data_io import write_slices
 from sklearn.feature_extraction.image import extract_patches_2d, reconstruct_from_patches_2d
 
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-
 def main():
     parser = create_parser()
     args = parser.parse_args()

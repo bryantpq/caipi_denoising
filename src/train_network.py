@@ -9,7 +9,6 @@ from modeling.get_model import get_model
 from modeling.callbacks import get_training_cb
 from preparation.prepare_tf_dataset import np_to_tfdataset
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def main():
     parser = create_parser()
