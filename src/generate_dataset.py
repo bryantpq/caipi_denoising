@@ -34,6 +34,7 @@ def main():
     y_slices_pp = preprocess_slices(y_slices,
                                    config['generate_dataset']['preprocessing_params'],
                                    steps=config['generate_dataset']['y_steps'])
+    print()
 
     if config['generate_dataset']['extract_patches']:
         patches_params = config['generate_dataset']['extract_patches_params']

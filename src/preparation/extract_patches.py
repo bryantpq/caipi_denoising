@@ -34,7 +34,6 @@ def extract_patches(data,
         for x_i in range(0, data.shape[2] - size_x + 1, step_x):
             indices.append(y_i + x_i)
   
-    print()
     print('Estimating space required to save patches...')
     print('Assuming data is float16 = 2bytes per pixel')
     print('    Number of slices:    ', len(data))
