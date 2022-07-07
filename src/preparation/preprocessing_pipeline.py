@@ -82,7 +82,7 @@ def random_xy_flip(X,
     for img_i in range(X.shape[0]):
         img = X[img_i]
         img = tf.image.stateless_random_flip_up_down(img, seed=[img_i, seed])
-        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed])
+        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed * seed])
         X[img_i] = img
         
     return X
