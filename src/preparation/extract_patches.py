@@ -13,6 +13,7 @@ def extract_patches(data,
                     extract_step=(1, 1), 
                     pad_before_ext=True, 
                     pad_value=0.0,
+                    return_patches=False,
                     save_dtype='float16',
                     workers=32):
     
@@ -54,9 +55,16 @@ def extract_patches(data,
                                            args=(slc_, ii, indices, patch_size, X_OR_Y, save_dtype, save_path)) )
         
     print('Saving patches to {}'.format(save_path))
-    results = [p.get() for p in processes] 
 
-    return np.vstack(results)
+    if return_patches:
+        results = [p.get() for p in processes] 
+
+        return np.vstack(results)
+    else:
+        for p in processes:
+            p.get()
+
+        return
 
 
 def _extract_patches_from_slice(slc,

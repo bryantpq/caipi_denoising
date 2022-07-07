@@ -10,10 +10,12 @@ generate_dataset:
     X_steps:
         - normalize
         - pad_square
+        - random_xy_flip
         - white_noise
     y_steps:
         - normalize
         - pad_square
+        - random_xy_flip
     extract_patches_params:
         patch_size: [32, 32]
         extract_step: [32, 32]
@@ -23,6 +25,8 @@ generate_dataset:
         normalize:
         pad_square:
             pad_value: -0.5
+        random_xy_flip:
+            seed: 24
         white_noise:
             mu: 0.0
             sigma: 0.15

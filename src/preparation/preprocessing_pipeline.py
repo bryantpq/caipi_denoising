@@ -77,11 +77,12 @@ def white_noise(X,
     return X
     
 
-def random_xy_flip(X):
+def random_xy_flip(X,
+                   seed=24):
     for img_i in range(X.shape[0]):
         img = X[img_i]
-        img = tf.image.random_flip_left_right(img)
-        img = tf.image.random_flip_up_down(img)
+        img = tf.image.stateless_random_flip_up_down(img, seed=[img_i, seed])
+        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed])
         X[img_i] = img
         
     return X
