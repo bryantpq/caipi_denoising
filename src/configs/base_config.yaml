@@ -21,6 +21,7 @@ generate_dataset:
         extract_step: [32, 32]
         pad_value: 0.0
         pad_before_ext: True
+        return_patches: False
     preprocessing_params:
         normalize:
         pad_square:

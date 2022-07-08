@@ -4,9 +4,9 @@ data
 models/
 src/configs/*
 !src/configs/base_config.yaml
-src/preparation/preprocessing_pipeline_layers.py
-src/preparation/tfds_preprocessing_pipeline.py
-src/preparation/custom_preprocessing_layers.py
+src/preparation/unused/preprocessing_pipeline_layers.py
+src/preparation/unused/tfds_preprocessing_pipeline.py
+src/preparation/unused/custom_preprocessing_layers.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

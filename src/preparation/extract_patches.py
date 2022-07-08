@@ -40,13 +40,13 @@ def extract_patches(data,
     print('    Patches per slice:   ', len(indices))
     print('    Patch size:          ', patch_size)
     print('    Save data type:      ', save_dtype)
-    print('        Total: {} * {} * {} * 2 = {:e} bytes'.format(len(data), len(indices), patch_size, 
+    print('        Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), len(indices), patch_size, 
                                                         len(data) * len(indices) * patch_size[0] * patch_size[1] * 2))
-    print('        Per slice: {} * {} * 2 = {:e} bytes'.format(len(indices), patch_size, 
+    print('        Per slice: {} * {} * 2 = {:.2e} bytes'.format(len(indices), patch_size, 
                                                        len(indices) * patch_size[0] * patch_size[1] * 2))
     print()
     
-    pool = mp.Pool(workers)
+    pool = mp.Pool(workers, maxtasksperchild=25)
     processes = []
     for ii, slc in enumerate(data):
         slc_ = slc[:,:,0]
@@ -57,11 +57,13 @@ def extract_patches(data,
 
     if return_patches:
         results = [p.get() for p in processes] 
+        print()
 
         return np.vstack(results)
     else:
         for p in processes:
             p.get()
+        print()
 
         return
 
