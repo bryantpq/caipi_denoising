@@ -1,4 +1,5 @@
 import argparse
+import logging
 import numpy as np
 import os
 
@@ -10,35 +11,37 @@ from preparation.gen_data import get_train_data
 from preparation.preprocessing_pipeline import preprocess_slices
 from preparation.extract_patches import extract_patches
 from utils.data_io import write_slices
+from utils.create_logger import create_logger
 
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
     config = yaml.safe_load(args.config)
+    create_logger(config['config_name'])
     
-    print(config)
-    print()
+    logging.info(config)
+    logging.info('')
     if config['generate_dataset']['median_slices']:
-        print('Gathering median slices...')
+        logging.info('Gathering median slices...')
     else:
-        print('Gathering all slices...')
+        logging.info('Gathering all slices...')
     X_slices, y_slices = get_train_data(median_slices=config['generate_dataset']['median_slices'])
-    print('X_slices.shape: {}, y_slices.shape: {}'.format(X_slices.shape, y_slices.shape))
+    logging.info('X_slices.shape: {}, y_slices.shape: {}'.format(X_slices.shape, y_slices.shape))
     
-    print('Preprocessing X slices...')
+    logging.info('Preprocessing X slices...')
     X_slices_pp = preprocess_slices(X_slices,
                                    config['generate_dataset']['preprocessing_params'],
                                    steps=config['generate_dataset']['X_steps'])
-    print('Preprocessing y slices...')
+    logging.info('Preprocessing y slices...')
     y_slices_pp = preprocess_slices(y_slices,
                                    config['generate_dataset']['preprocessing_params'],
                                    steps=config['generate_dataset']['y_steps'])
-    print()
+    logging.info('')
 
     if config['generate_dataset']['extract_patches']:
         patches_params = config['generate_dataset']['extract_patches_params']
-        print('Extracting then saving patches...')
+        logging.info('Extracting then saving patches...')
         extract_patches(X_slices_pp, 'X',
                         save_path=config['data_folder'],
                         patch_size=patches_params['patch_size'],
@@ -57,11 +60,11 @@ def main():
                         workers=config['workers'])
 
     else:
-        print('Saving slices...')
+        logging.info('Saving slices...')
         write_slices(X_slices_pp, 'X', config['data_folder'], config['generate_dataset']['save_dtype'])
         write_slices(y_slices_pp, 'y', config['data_folder'], config['generate_dataset']['save_dtype'])
 
-    print('Generating dataset complete for config: {}'.format(config['config_name']))
+    logging.info('Generating dataset complete for config: {}'.format(config['config_name']))
 
     
 def create_parser():

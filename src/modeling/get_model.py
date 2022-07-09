@@ -1,3 +1,4 @@
+import logging
 import os
 import tensorflow as tf
 
@@ -14,11 +15,11 @@ def get_model(model_type, input_shape=None, load_model_path=None):
     img_size = input_shape[1:]
     
     if model_type == 0:
-        print('    Using model type 0')
+        logging.info('    Using model type 0')
         model = Denoiser(input_shape=img_size).model
         
     elif model_type == 1:
-        print('    Using model type 1')
+        logging.info('    Using model type 1')
         model = get_denoiser(input_shape=img_size)
 
     model.build(input_shape=input_shape)
@@ -27,7 +28,7 @@ def get_model(model_type, input_shape=None, load_model_path=None):
                   metrics=[])
     
     if load_model_path is not None:
-        print('    Loading model weights: {}'.format(load_model_path))
+        logging.info('    Loading model weights: {}'.format(load_model_path))
         model.load_weights(load_model_path)
     
     return model

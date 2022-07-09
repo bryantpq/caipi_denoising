@@ -1,3 +1,4 @@
+import logging
 import os
 import tensorflow as tf
 from datetime import date
@@ -21,7 +22,7 @@ def get_training_cb(patience=3,
     
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-        print("Creating new folder for model weights: {}".format(save_path))
+        logging.info("Creating new folder for model weights: {}".format(save_path))
     
     save_filename = os.path.join(save_path, save_filename)
     cb_checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=save_filename,
@@ -33,7 +34,7 @@ def get_training_cb(patience=3,
     log_dir = "/home/quahb/caipi_denoising/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-        print('Creating new folder for TensorBoard logging: {}'.format(log_dir))
+        logging.info('Creating new folder for TensorBoard logging: {}'.format(log_dir))
     cb_tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     
     # Return CB

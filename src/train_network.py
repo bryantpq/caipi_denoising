@@ -1,23 +1,25 @@
 import argparse
+import logging
 import numpy as np
 import os
 import tensorflow as tf
 import yaml
 
-from utils.data_io import load_dataset
 from modeling.get_model import get_model
 from modeling.callbacks import get_training_cb
 from preparation.prepare_tf_dataset import np_to_tfdataset
-
+from utils.data_io import load_dataset
+from utils.create_logger import create_logger
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
     config = yaml.safe_load(args.config)
+    create_logger(config['config_name'])
 
-    print(config)
-    print()
-    print('Loading training dataset from: {}'.format(config['data_folder']))
+    logging.info(config)
+    logging.info('')
+    logging.info('Loading training dataset from: {}'.format(config['data_folder']))
     X, y = load_dataset(config['data_folder'])
 
     shuffle_i = np.random.permutation(len(X))
@@ -29,14 +31,14 @@ def main():
     
     del X, y
     
-    print('Train/Valid split:')
-    print(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape)
+    logging.info('Train/Valid split:')
+    logging.info(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape)
     
     train_data = np_to_tfdataset(X_train, y_train)
     val_data   = np_to_tfdataset(X_valid, y_valid)
     
-    print()
-    print('Creating model...')
+    logging.info()
+    logging.info('Creating model...')
     train_params = config['train_network']
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus_to_use'])
     with strategy.scope():
@@ -44,7 +46,7 @@ def main():
                           input_shape=train_params['input_shape'],
                           load_model_path=train_params['load_model_path'])
 
-    print(model.summary())
+    logging.info(model.summary())
 
     cb_list = get_training_cb(patience=train_params['patience'],
                               save_path=os.path.join(train_params['save_model_folder'], config['config_name']), 
@@ -57,8 +59,8 @@ def main():
                         initial_epoch=train_params['init_epoch'],
                         callbacks=cb_list,
                         shuffle=True)
-    print(history.history)
-    print('Training complete for config: {}'.format(config['config_name']))
+    logging.info(history.history)
+    logging.info('Training complete for config: {}'.format(config['config_name']))
 
 
 def create_parser():

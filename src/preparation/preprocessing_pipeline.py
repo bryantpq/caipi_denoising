@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import tensorflow as tf
 
@@ -10,7 +11,7 @@ def preprocess_slices(data,
     
     pipeline = gen_pipeline(steps=steps)
     for func, name in pipeline:
-        print('   step: {}'.format(name))
+        logging.info('   step: {}'.format(name))
         if preprocessing_params[name] is None:
             data = func(data)
         else:
@@ -40,7 +41,7 @@ def gen_pipeline(steps):
                 pipeline.append( (random_xy_flip, step) )
 
             else:
-                print('Operation {} not supported'.format(step))
+                logging.info('Operation {} not supported'.format(step))
     
     return pipeline
 

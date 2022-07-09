@@ -1,3 +1,4 @@
+import logging
 import multiprocessing as mp
 import numpy as np
 import tensorflow as tf
@@ -34,17 +35,17 @@ def extract_patches(data,
         for x_i in range(0, data.shape[2] - size_x + 1, step_x):
             indices.append(y_i + x_i)
   
-    print('Estimating space required to save patches...')
-    print('Assuming data is float16 = 2bytes per pixel')
-    print('    Number of slices:    ', len(data))
-    print('    Patches per slice:   ', len(indices))
-    print('    Patch size:          ', patch_size)
-    print('    Save data type:      ', save_dtype)
-    print('        Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), len(indices), patch_size, 
+    logging.info('Estimating space required to save patches...')
+    logging.info('Assuming data is float16 = 2bytes per pixel')
+    logging.info('    Number of slices:    {}'.format(len(data)))
+    logging.info('    Patches per slice:   {}'.format(len(indices)))
+    logging.info('    Patch size:          {}'.format(patch_size))
+    logging.info('    Save data type:      {}'.format(save_dtype))
+    logging.info('        Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), len(indices), patch_size, 
                                                         len(data) * len(indices) * patch_size[0] * patch_size[1] * 2))
-    print('        Per slice: {} * {} * 2 = {:.2e} bytes'.format(len(indices), patch_size, 
+    logging.info('        Per slice: {} * {} * 2 = {:.2e} bytes'.format(len(indices), patch_size, 
                                                        len(indices) * patch_size[0] * patch_size[1] * 2))
-    print()
+    logging.info('')
     
     pool = mp.Pool(workers, maxtasksperchild=25)
     processes = []
@@ -53,17 +54,21 @@ def extract_patches(data,
         processes.append( pool.apply_async(_extract_patches_from_slice,
                                            args=(slc_, ii, indices, patch_size, X_OR_Y, save_dtype, save_path)) )
         
-    print('Saving patches to {}'.format(save_path))
+    logging.info('Saving patches to {}'.format(save_path))
 
     if return_patches:
         results = [p.get() for p in processes] 
-        print()
+        pool.close()
+        pool.join()
+        logging.info('')
 
         return np.vstack(results)
     else:
         for p in processes:
             p.get()
-        print()
+        pool.close()
+        pool.join()
+        logging.info('')
 
         return
 
@@ -81,7 +86,7 @@ def _extract_patches_from_slice(slc,
     patches = patches[keep_idx]
     
     if slc_i % 500 == 0: 
-        print('    ... completed slice {}'.format(slc_i))
+        logging.info('    ... completed slice {}'.format(slc_i))
 
     write_patches(slc_i,
                   patches, 

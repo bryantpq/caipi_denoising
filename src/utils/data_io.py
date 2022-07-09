@@ -1,6 +1,6 @@
+import logging
 import multiprocessing as mp
 import numpy as np
-import time
 import os
 
 """
@@ -11,21 +11,21 @@ def load_dataset(data_folder):
     files = os.listdir(data_folder)
     
     if len(files) == 2:
-        print('    Loading slices...')
+        logging.info('    Loading slices...')
         X_file = os.path.join(data_folder, files[0])
         y_file = os.path.join(data_folder, files[1])
         
         return np.load(X_file), np.load(y_file)
     
     elif len(files) > 2: 
-        print('    Loading patches...')
+        logging.info('    Loading patches...')
         X_patches = load_patches('X', data_folder)
         y_patches = load_patches('y', data_folder)
         
         return X_patches, y_patches
     
     else:
-        print('Error not understood number of files in dir: {}'.format(data_folder))
+        logging.info('Error not understood number of files in dir: {}'.format(data_folder))
         
         return None, None
         
@@ -56,7 +56,7 @@ def write_patches(slc_i,
 def load_patches(X_OR_Y, folder_path, workers=32):
     
     files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
-    print('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
+    logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
     
     pool = mp.Pool(workers, maxtasksperchild=25)
     processes = []
@@ -69,8 +69,8 @@ def load_patches(X_OR_Y, folder_path, workers=32):
     
     results = np.vstack(results)
     
-    print('Loading patches complete.')
-    print('    Dataset shape: {}'.format(results.shape))
+    logging.info('Loading patches complete.')
+    logging.info('    Dataset shape: {}'.format(results.shape))
     
     return results
 
@@ -78,4 +78,4 @@ def load_patches(X_OR_Y, folder_path, workers=32):
 def create_folders(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        print("Creating new folder dataset: {}".format(path))
+        logging.info("Creating new folder dataset: {}".format(path))
