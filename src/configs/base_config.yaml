@@ -1,9 +1,10 @@
 config_name: 'base_config'
 data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
 results_folder: '/home/quahb/caipi_denoising/data/results/base_config'
+save_model_folder: '/home/quahb/caipi_denoising/models'
 
 generate_dataset:
-    median_slices: True
+    median_slices: False
     extract_patches: True
     save_dtype: 'float16'
 
@@ -17,11 +18,10 @@ generate_dataset:
         - pad_square
         - random_xy_flip
     extract_patches_params:
-        patch_size: [32, 32]
-        extract_step: [32, 32]
+        patch_size: [256, 256]
+        extract_step: [128, 128]
         pad_value: 0.0
-        pad_before_ext: True
-        return_patches: False
+        pad_before_ext: False
     preprocessing_params:
         normalize:
         pad_square:
@@ -33,24 +33,22 @@ generate_dataset:
             sigma: [0.10, 0.15, 0.20]
 
 train_network:
-    model_type: 0
-    input_shape: [null, 32, 32, 1]
-    load_model_path: '/home/quahb/caipi_denoising/models/2022-06-01/denoiser_ep02.h5'
-    save_model_folder: '/home/quahb/caipi_denoising/models'
-    save_model_filename: 'base_config_patches_ep{epoch:02d}.h5'
+    model_type: 2
+    input_shape: [null, 256, 256, 1]
+    load_model_path: null 
     valid_split: 0.8
-    n_epochs: 10
+    n_epochs: 40
     init_epoch: 0
     patience: 4
     batch_size: 32
-    
+
 predict_test:
     train_or_test_set: 'test'
-    model_type: 0
-    load_model_path: '/home/quahb/caipi_denoising/models/2022-06-22/denoiser_ep06.h5'
-    extract_patches: False
-    input_shape: [null, 384, 384, 1]
-    predict_n_slices: 1000
+    model_type: 2
+    load_model_path: ''
+    extract_patches: True
+    input_shape: [null, 256, 256, 1]
+    predict_n_slices: 1024
     shuffle: True
     save_dtype: 'float16'
     X_steps:
@@ -59,7 +57,7 @@ predict_test:
         pad_square:
             pad_value: 0.0
         
-workers: 20
+workers: 32
 gpus_to_use:
 - /GPU:0
 - /GPU:1

@@ -58,7 +58,7 @@ def load_patches(X_OR_Y, folder_path, workers=32):
     files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
     logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
     
-    pool = mp.Pool(workers, maxtasksperchild=25)
+    pool = mp.Pool(workers, maxtasksperchild=1)
     processes = []
     
     for f in files:

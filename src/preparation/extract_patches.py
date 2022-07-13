@@ -47,12 +47,18 @@ def extract_patches(data,
                                                        len(indices) * patch_size[0] * patch_size[1] * 2))
     logging.info('')
     
-    pool = mp.Pool(workers, maxtasksperchild=25)
+    pool = mp.Pool(workers, maxtasksperchild=1)
     processes = []
     for ii, slc in enumerate(data):
         slc_ = slc[:,:,0]
         processes.append( pool.apply_async(_extract_patches_from_slice,
-                                           args=(slc_, ii, indices, patch_size, X_OR_Y, save_dtype, save_path)) )
+                                           args=(slc_, 
+                                                 ii, 
+                                                 indices, 
+                                                 patch_size, 
+                                                 X_OR_Y, 
+                                                 save_dtype, 
+                                                 save_path)) )
         
     logging.info('Saving patches to {}'.format(save_path))
 
@@ -60,15 +66,14 @@ def extract_patches(data,
         results = [p.get() for p in processes] 
         pool.close()
         pool.join()
-        logging.info('')
+        logging.info('Completed processing patches.')
 
         return np.vstack(results)
     else:
-        for p in processes:
-            p.get()
+        for p in processes: p.get()
         pool.close()
         pool.join()
-        logging.info('')
+        logging.info('Completed processing patches.')
 
         return
 
@@ -85,7 +90,7 @@ def _extract_patches_from_slice(slc,
     patches = np.expand_dims(patches, axis=3)
     patches = patches[keep_idx]
     
-    if slc_i % 500 == 0: 
+    if slc_i % 1000 == 0: 
         logging.info('    ... completed slice {}'.format(slc_i))
 
     write_patches(slc_i,

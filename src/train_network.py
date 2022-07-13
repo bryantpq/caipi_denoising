@@ -11,6 +11,7 @@ from preparation.prepare_tf_dataset import np_to_tfdataset
 from utils.data_io import load_dataset
 from utils.create_logger import create_logger
 
+
 def main():
     parser = create_parser()
     args = parser.parse_args()
@@ -32,12 +33,12 @@ def main():
     del X, y
     
     logging.info('Train/Valid split:')
-    logging.info(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape)
+    logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
     
     train_data = np_to_tfdataset(X_train, y_train)
     val_data   = np_to_tfdataset(X_valid, y_valid)
     
-    logging.info()
+    logging.info('')
     logging.info('Creating model...')
     train_params = config['train_network']
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus_to_use'])
@@ -49,8 +50,8 @@ def main():
     logging.info(model.summary())
 
     cb_list = get_training_cb(patience=train_params['patience'],
-                              save_path=os.path.join(train_params['save_model_folder'], config['config_name']), 
-                              save_filename=train_params['save_model_filename'])
+                              model_type=train_params['model_type'],
+                              save_path=os.path.join(config['save_model_folder'], config['config_name']))
     
     history = model.fit(train_data,
                         validation_data=val_data,

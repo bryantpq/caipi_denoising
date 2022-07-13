@@ -1,6 +1,7 @@
 # CAIPI Denoising
 *.swp
 data
+logs/
 models/
 src/configs/*
 !src/configs/base_config.yaml
