@@ -69,7 +69,7 @@ def load_patches(X_OR_Y, folder_path, workers=32):
     
     results = np.vstack(results)
     
-    logging.info('Loading patches complete.')
+    logging.info('    Loading patches complete.')
     logging.info('    Dataset shape: {}'.format(results.shape))
     
     return results

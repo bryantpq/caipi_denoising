@@ -23,7 +23,7 @@ def main():
     logging.info('Loading training dataset from: {}'.format(config['data_folder']))
     X, y = load_dataset(config['data_folder'])
 
-    shuffle_i = np.random.permutation(len(X))
+    shuffle_i = np.random.RandomState(seed=42).permutation(len(X))
     X, y = X[shuffle_i], y[shuffle_i]
     
     val_i = int( len(X) * config['train_network']['valid_split'] )

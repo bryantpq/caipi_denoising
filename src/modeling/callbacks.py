@@ -28,7 +28,7 @@ def get_training_cb(patience=3,
     cb_checkpoint = tf.keras.callbacks.ModelCheckpoint(filepath=save_filename,
                                                        verbose=1,
                                                        save_best_only=True,
-                                                       monitor='loss',
+                                                       monitor='val_loss',
                                                        mode='min')
 
     # CB: Tensorboard info
@@ -36,7 +36,12 @@ def get_training_cb(patience=3,
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
         logging.info('Creating new folder for TensorBoard logging: {}'.format(log_dir))
-    cb_tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    cb_tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
+                                                    histogram_freq=1,
+                                                    batch_size=32,
+                                                    write_grads=True,
+                                                    write_images=False,
+                                                    write_graph=False)
     
     cb_list = [cb_earlystop, cb_checkpoint, cb_tensorboard]
     
