@@ -11,14 +11,14 @@ def load_dataset(data_folder):
     files = os.listdir(data_folder)
     
     if len(files) == 2:
-        logging.info('    Loading slices...')
+        logging.info('Loading slices...')
         X_file = os.path.join(data_folder, files[0])
         y_file = os.path.join(data_folder, files[1])
         
         return np.load(X_file), np.load(y_file)
     
     elif len(files) > 2: 
-        logging.info('    Loading patches...')
+        logging.info('Loading patches...')
         X_patches = load_patches('X', data_folder)
         y_patches = load_patches('y', data_folder)
         
@@ -57,7 +57,12 @@ def load_patches(X_OR_Y, folder_path, workers=32):
     
     files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
     logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
-    
+
+    # sort file names
+    files = [ ( int(fname.split('_')[0]), fname ) for fname in files ]
+    files.sort(key=lambda x: x[0])
+    files = [ f[1] for f in files ]
+
     pool = mp.Pool(workers, maxtasksperchild=1)
     processes = []
     

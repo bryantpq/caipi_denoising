@@ -45,7 +45,8 @@ def main():
     with strategy.scope():
         model = get_model(model_type=train_params['model_type'], 
                           input_shape=train_params['input_shape'],
-                          load_model_path=train_params['load_model_path'])
+                          load_model_path=train_params['load_model_path'],
+                          learning_rate=train_params['learning_rate'])
 
     logging.info(model.summary())
 

@@ -7,7 +7,10 @@ from tensorflow.keras.models import Model
 from modeling.models import Denoiser, get_model1, get_model2, get_model3, get_model4
 
 
-def get_model(model_type, input_shape=None, load_model_path=None):
+def get_model(model_type, 
+              input_shape=None, 
+              load_model_path=None,
+              learning_rate=0.001):
     assert len(input_shape) == 4, "Expected input_shape to be 4-dim. Got {}".format(input_shape)
     
     img_size = input_shape[1:]
@@ -33,9 +36,9 @@ def get_model(model_type, input_shape=None, load_model_path=None):
         model = get_model4(input_shape=img_size)
 
     model.build(input_shape=input_shape)
-    model.compile(optimizer=tf.keras.optimizers.Adam(),
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                   loss=losses.MeanSquaredError(), 
-                  metrics=[])
+                  metrics=['loss'])
     
     if load_model_path is not None and load_model_path != '' :
         logging.info('    Loading model weights: {}'.format(load_model_path))

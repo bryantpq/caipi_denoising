@@ -11,7 +11,7 @@ def get_training_cb(patience=3,
     Return list of callbacks to be used in model.fit(cb=cb)
     """
     # CB: Early stopping
-    cb_earlystop = tf.keras.callbacks.EarlyStopping(monitor='loss',
+    cb_earlystop = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                                                     verbose=1,
                                                     patience=patience)
     
