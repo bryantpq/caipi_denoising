@@ -93,7 +93,6 @@ def get_slices(modality, dicoms_dict):
 
 
 def get_median_slices(X, 
-                      n_subjects=None, 
                       left_i=35, 
                       right_i=221):
     """
@@ -101,10 +100,7 @@ def get_median_slices(X,
     """
     N_SLCS = 256
     
-    if n_subjects is None:
-        n_subjects = X.shape[0] // N_SLCS
-    else:
-        n_subjects = 63
+    n_subjects = X.shape[0] // N_SLCS
         
     outputs = np.empty((0, X.shape[1], X.shape[2], X.shape[3]))
     for i in range(n_subjects):
