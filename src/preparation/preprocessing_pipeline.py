@@ -34,6 +34,9 @@ def gen_pipeline(steps):
             elif step == 'normalize':
                 pipeline.append( (normalize, step) )
 
+            elif step == 'standardize':
+                pipeline.append( (standardize, step) )
+
             elif step == 'white_noise':
                 pipeline.append( (white_noise, step) )
 
@@ -50,11 +53,42 @@ def gen_pipeline(steps):
 Preprocessing Operations
 """
 
-def normalize(X):
-    mean = np.mean(X)
-    std  = np.std(X)
-    
-    return (X - mean) / std
+def normalize(X,
+              mode='batch'):
+    if mode == 'batch':
+        mean, std = np.mean(X), np.std(X)
+
+        return (X - mean) / std
+
+    elif mode == 'slice':
+        for i in range(len(X)):
+            mean, std = np.mean(X[i]), np.std(X[i])
+
+            X[i] = (X[i] - mean) / std
+
+        return X
+
+
+def standardize(X,
+                mode='batch'):
+    if mode == 'batch':
+        min_ds, max_ds = np.min(X), np.max(X)
+
+        num = X - min_ds
+        den = max_ds - min_ds
+
+        return num / den
+
+    elif mode == 'slice':
+        for i in range(len(X)):
+            min_slc, max_slc = np.min(X[i]), np.max(X[i])
+
+            num = X[i] - min_slc
+            den = max_slc - min_slc
+
+            X[i] = num / den
+
+        return X
 
 
 def pad_square(X, 
@@ -71,11 +105,11 @@ def pad_square(X,
 
 def white_noise(X, 
                 mu=0.0, 
-                sigma=0.1):
-    if type(sigma) == list: sigma = np.random.choice(sigma)
-
-    noise_map = np.random.normal(mu, sigma, (X.shape))
-    X = X + noise_map
+                sigma=0.2):
+    for i in range(len(X)):
+        max_val = np.max(X[i])
+        noise_map = np.random.normal(mu, sigma * max_val, X[i].shape)
+        X[i] = X[i] + noise_map
 
     return X
     

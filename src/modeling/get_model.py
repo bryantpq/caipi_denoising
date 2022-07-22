@@ -38,7 +38,7 @@ def get_model(model_type,
     model.build(input_shape=input_shape)
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                   loss=losses.MeanSquaredError(), 
-                  metrics=['loss'])
+                  metrics=[])
     
     if load_model_path is not None and load_model_path != '' :
         logging.info('    Loading model weights: {}'.format(load_model_path))

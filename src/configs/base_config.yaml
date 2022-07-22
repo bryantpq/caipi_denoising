@@ -3,41 +3,13 @@ data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
 results_folder: '/home/quahb/caipi_denoising/data/results/base_config'
 save_model_folder: '/home/quahb/caipi_denoising/models'
 
-generate_dataset:
-    median_slices: False
-    extract_patches: True
-    save_dtype: 'float16'
-
-    X_steps:
-        - normalize
-        - pad_square
-        - random_xy_flip
-        - white_noise
-    y_steps:
-        - normalize
-        - pad_square
-        - random_xy_flip
-    extract_patches_params:
-        patch_size: [256, 256]
-        extract_step: [128, 128]
-        pad_value: 0.0
-        pad_before_ext: False
-    preprocessing_params:
-        normalize:
-        pad_square:
-            pad_value: 0.0
-        random_xy_flip:
-            seed: 24
-        white_noise:
-            mu: 0.0
-            sigma: [0.10, 0.15, 0.20]
-
 train_network:
     model_type: 2
     input_shape: [null, 256, 256, 1]
     load_model_path: null 
     valid_split: 0.8
     n_epochs: 40
+    learning_rate: 0.001
     init_epoch: 0
     patience: 4
     batch_size: 32
@@ -49,6 +21,7 @@ predict_test:
     extract_patches: True
     input_shape: [null, 256, 256, 1]
     predict_n_slices: 1024
+    recon_patches: True
     shuffle: True
     save_dtype: 'float16'
     X_steps:

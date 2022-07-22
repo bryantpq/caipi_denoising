@@ -38,8 +38,6 @@ def get_training_cb(patience=3,
         logging.info('Creating new folder for TensorBoard logging: {}'.format(log_dir))
     cb_tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
                                                     histogram_freq=1,
-                                                    batch_size=32,
-                                                    write_grads=True,
                                                     write_images=False,
                                                     write_graph=False)
     
