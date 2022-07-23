@@ -31,7 +31,7 @@ predict_test:
             pad_value: 0.0
         
 workers: 32
-gpus_to_use:
+gpus:
 - /GPU:0
 - /GPU:1
 - /GPU:2

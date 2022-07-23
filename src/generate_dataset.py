@@ -22,11 +22,11 @@ def main():
     
     logging.info(config)
     logging.info('')
-    if config['generate_dataset']['median_slices']:
-        logging.info('Gathering median slices...')
+    if config['generate_dataset']['threshold_intensities']:
+        logging.info('Gathering thresholded slices...')
     else:
         logging.info('Gathering all slices...')
-    X_slices, y_slices = get_train_data(median_slices=config['generate_dataset']['median_slices'])
+    X_slices, y_slices = get_train_data(threshold_intensities=config['generate_dataset']['threshold_intensities'])
     logging.info('X_slices.shape: {}, y_slices.shape: {}'.format(X_slices.shape, y_slices.shape))
     
     logging.info('Preprocessing X slices...')

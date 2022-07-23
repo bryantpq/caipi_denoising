@@ -85,7 +85,6 @@ def _extract_patches_from_slice(slc,
                                 X_OR_Y,
                                 save_dtype,
                                 save_path):
-    
     patches = extract_patches_2d(slc, patch_size)
     patches = np.expand_dims(patches, axis=3)
     patches = patches[keep_idx]
