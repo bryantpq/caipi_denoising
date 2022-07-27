@@ -25,9 +25,9 @@ generate_dataset:
             seed: 24
         white_noise:
             mu: 0.0
-            sigma: 0.20
+            sigma: 0.10
 
-workers: 15
+workers: 5
 gpus:
 - /GPU:0
 - /GPU:1

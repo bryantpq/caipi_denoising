@@ -55,7 +55,7 @@ def main():
     
     logging.info('')
     logging.info('Creating model...')
-    strategy = tf.distribute.MirroredStrategy(devices=config['gpus_to_use'])
+    strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
         model = get_model(model_type=config['predict_test']['model_type'], 
                           input_shape=config['predict_test']['input_shape'],

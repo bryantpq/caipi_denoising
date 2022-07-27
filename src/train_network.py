@@ -41,7 +41,7 @@ def main():
     logging.info('')
     logging.info('Creating model...')
     train_params = config['train_network']
-    strategy = tf.distribute.MirroredStrategy(devices=config['gpus_to_use'])
+    strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
         model = get_model(model_type=train_params['model_type'], 
                           input_shape=train_params['input_shape'],

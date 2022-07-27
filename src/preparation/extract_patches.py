@@ -1,7 +1,9 @@
 import logging
+import utils.istarmap
 import multiprocessing as mp
 import numpy as np
 import tensorflow as tf
+import tqdm
 
 from utils.data_io import write_patches
 from sklearn.feature_extraction.image import extract_patches_2d
@@ -41,42 +43,37 @@ def extract_patches(data,
     logging.info('    Patches per slice:   {}'.format(len(indices)))
     logging.info('    Patch size:          {}'.format(patch_size))
     logging.info('    Save data type:      {}'.format(save_dtype))
-    logging.info('        Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), len(indices), patch_size, 
-                                                        len(data) * len(indices) * patch_size[0] * patch_size[1] * 2))
     logging.info('        Per slice: {} * {} * 2 = {:.2e} bytes'.format(len(indices), patch_size, 
                                                        len(indices) * patch_size[0] * patch_size[1] * 2))
+    logging.info('            Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), len(indices), patch_size, 
+                                                        len(data) * len(indices) * patch_size[0] * patch_size[1] * 2))
     logging.info('')
     
-    pool = mp.Pool(workers, maxtasksperchild=1)
-    processes = []
-    for ii, slc in enumerate(data):
-        slc_ = slc[:,:,0]
-        processes.append( pool.apply_async(_extract_patches_from_slice,
-                                           args=(slc_, 
-                                                 ii, 
-                                                 indices, 
-                                                 patch_size, 
-                                                 X_OR_Y, 
-                                                 save_dtype, 
-                                                 save_path)) )
-        
-    logging.info('Saving patches to {}'.format(save_path))
+    res = []
+    with mp.Pool(workers) as pool:
+        args_list = []
+        for ii, slc in enumerate(data):
+            args = [
+                slc[:,:,0],
+                ii,
+                indices,
+                patch_size,
+                X_OR_Y,
+                save_dtype,
+                save_path,
+                return_patches
+            ]
+            args_list.append(args)
+
+        logging.info('Saving patches to {} ...'.format(save_path))
+        res = list(tqdm.tqdm(pool.istarmap(_extract_patches_from_slice, args_list), total=len(args_list)), ncols=80)
+
+    logging.info(f'Completed. Generated {len(res)} patches for {X_OR_Y}.')
 
     if return_patches:
-        results = [p.get() for p in processes] 
-        pool.close()
-        pool.join()
-        logging.info('Completed processing patches.')
-
-        return np.vstack(results)
+        return np.vstack(res)
     else:
-        for p in processes: p.get()
-        pool.close()
-        pool.join()
-        logging.info('Completed processing patches.')
-
-        return
-
+        return res
 
 def _extract_patches_from_slice(slc,
                                 slc_i,
@@ -84,18 +81,19 @@ def _extract_patches_from_slice(slc,
                                 patch_size,
                                 X_OR_Y,
                                 save_dtype,
-                                save_path):
+                                save_path,
+                                return_patches):
     patches = extract_patches_2d(slc, patch_size)
     patches = np.expand_dims(patches, axis=3)
     patches = patches[keep_idx]
     
-    if slc_i % 1000 == 0: 
-        logging.info('    ... completed slice {}'.format(slc_i))
-
     write_patches(slc_i,
                   patches, 
                   X_OR_Y,
                   save_dtype, 
                   save_path)
-        
-    return patches
+
+    if return_patches:
+        return patches
+    else:
+        return slc_i

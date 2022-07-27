@@ -42,7 +42,8 @@ def main():
     if config['generate_dataset']['extract_patches']:
         patches_params = config['generate_dataset']['extract_patches_params']
         logging.info('Extracting then saving patches...')
-        logging.info('    Processing X...')
+
+        logging.info('Processing X...')
         extract_patches(X_slices_pp, 'X',
                         save_path=config['data_folder'],
                         patch_size=patches_params['patch_size'],
@@ -51,7 +52,9 @@ def main():
                         pad_value=patches_params['pad_value'],
                         save_dtype=config['generate_dataset']['save_dtype'],
                         workers=config['workers'])
-        logging.info('    Processing y...')
+        logging.info('')
+
+        logging.info('Processing y...')
         extract_patches(y_slices_pp, 'y',
                         save_path=config['data_folder'],
                         patch_size=patches_params['patch_size'],
@@ -60,6 +63,7 @@ def main():
                         pad_value=patches_params['pad_value'],
                         save_dtype=config['generate_dataset']['save_dtype'],
                         workers=config['workers'])
+        logging.info('')
 
     else:
         logging.info('Saving slices...')

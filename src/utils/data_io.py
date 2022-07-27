@@ -2,6 +2,7 @@ import logging
 import multiprocessing as mp
 import numpy as np
 import os
+import tqdm
 
 """
 Save/Load by slices/patches rather than whole array to track progress
@@ -44,8 +45,8 @@ def write_slices(slices,
 def write_patches(slc_i, 
                   patches,
                   X_OR_Y,
-                  save_dtype='float16',
-                  save_path='/home/quahb/caipi_denoising/data/preprocessed_patches/config1'):
+                  save_dtype,
+                  save_path):
     create_folders(save_path)
     save_path = os.path.join(save_path, str(slc_i) + '_{}.npy'.format(X_OR_Y))
     patches = patches.astype(save_dtype)
@@ -53,25 +54,23 @@ def write_patches(slc_i,
     np.save(save_path, patches)  
 
 
-def load_patches(X_OR_Y, folder_path, workers=32):
+def load_patches(X_OR_Y, folder_path, load_n_slices=None, workers=32):
     
     files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
-    logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
 
     # sort file names
     files = [ ( int(fname.split('_')[0]), fname ) for fname in files ]
     files.sort(key=lambda x: x[0])
     files = [ f[1] for f in files ]
 
-    pool = mp.Pool(workers, maxtasksperchild=1)
-    processes = []
-    
-    for f in files:
-        f_path = os.path.join(folder_path, f)
-        processes.append( pool.apply_async(np.load,
-                                           args=(f_path, )) )
-    results = [ p.get() for p in processes ]
-    
+    logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
+
+    if load_n_slices is not None: files = files[:load_n_slices]
+
+    results = []
+    with mp.Pool(workers) as pool:
+        paths = [ os.path.join(folder_path, f) for f in files ]
+        results = list(tqdm.tqdm(pool.imap(np.load, paths), total=len(paths), ncols=80))
     results = np.vstack(results)
     
     logging.info('    Loading patches complete.')

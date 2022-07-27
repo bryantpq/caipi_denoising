@@ -9,6 +9,7 @@ def preprocess_slices(data,
 
     assert len(data) != 4, 'data should have 4 dimensions. Given {}'.format(data.shape)
     
+    data = data.astype('float32')
     pipeline = gen_pipeline(steps=steps)
     for func, name in pipeline:
         logging.info('   step: {}'.format(name))
