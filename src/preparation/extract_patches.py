@@ -66,7 +66,10 @@ def extract_patches(data,
             args_list.append(args)
 
         logging.info('Saving patches to {} ...'.format(save_path))
-        res = list(tqdm.tqdm(pool.istarmap(_extract_patches_from_slice, args_list), total=len(args_list)), ncols=80)
+        res = list( tqdm.tqdm(
+            pool.istarmap(_extract_patches_from_slice, args_list),
+            total=len(args_list), ncols=80) 
+        )
 
     logging.info(f'Completed. Generated {len(res)} patches for {X_OR_Y}.')
 

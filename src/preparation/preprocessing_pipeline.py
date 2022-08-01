@@ -29,20 +29,23 @@ def gen_pipeline(steps):
     
     if steps is not None:
         for step in steps:
-            if   step == 'pad_square':
+            if step == 'normalize':
+                pipeline.append( (normalize, step) )
+
+            elif   step == 'pad_square':
                 pipeline.append( (pad_square, step) )
 
-            elif step == 'normalize':
-                pipeline.append( (normalize, step) )
+            elif step == 'random_xy_flip':
+                pipeline.append( (random_xy_flip, step) )
 
             elif step == 'standardize':
                 pipeline.append( (standardize, step) )
 
+            elif step == 'threshold_intensities':
+                pipeline.append( (threshold_intensities, step) )
+
             elif step == 'white_noise':
                 pipeline.append( (white_noise, step) )
-
-            elif step == 'random_xy_flip':
-                pipeline.append( (random_xy_flip, step) )
 
             else:
                 logging.info('Operation {} not supported'.format(step))
@@ -71,8 +74,20 @@ def normalize(X,
 
 
 def standardize(X,
-                mode='batch'):
-    if mode == 'batch':
+                mode='subject'):
+    if mode == 'subject':
+        std_X = np.zeros(X.shape, dtype='float32')
+
+        for subj_i in range(int(len(X) / 256)):
+            subj_vol = X[subj_i * 256: subj_i * 256 + 256]
+            min_val, max_val = np.min(subj_vol), np.max(subj_vol)
+            num = subj_vol - min_val
+            den = max_val - min_val
+            std_X[subj_i * 256: subj_i * 256 + 256] = num / den
+
+        return std_X
+
+    elif mode == 'batch':
         min_ds, max_ds = np.min(X), np.max(X)
 
         num = X - min_ds
@@ -90,6 +105,18 @@ def standardize(X,
             X[i] = num / den
 
         return X
+
+
+def threshold_intensities(X, 
+                          value=5000):
+    orig_len = len(X)
+    sum_intensities = np.array([ np.sum(X[i]) for i in range(len(X)) ])
+    X = X[np.where(sum_intensities > value)]
+    new_len = len(X)
+    logging.info(f'        Original n slices: {orig_len}')
+    logging.info(f'        New n slices: {new_len}')
+
+    return X
 
 
 def pad_square(X, 

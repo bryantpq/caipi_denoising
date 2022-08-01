@@ -8,19 +8,19 @@ import pydicom as dicom
 
 SLC_THRESHOLD_VALUES = {
         '01': 2900000,
-        '07': 55000000,
+        '07': 5500000,
         '08': 2900000
     }
 
 
-def get_train_data(threshold_intensities=False):
+def get_train_data():
     """
     Return np.array of all slices to be used for training and validation.
     """
     MODALITY = '3D_T2STAR_segEPI'
     dicoms_dict = get_data_dict()
     
-    X_train, _ = get_slices(MODALITY, dicoms_dict, threshold_intensities)
+    X_train, _ = get_slices(MODALITY, dicoms_dict)
     X_train = np.expand_dims(X_train, axis=3)
     y_train = np.copy(X_train)
     
@@ -73,7 +73,7 @@ def get_data_dict(json_file_path='/home/quahb/caipi_denoising/data/data.json'):
     return dicoms_dict
 
 
-def get_slices(modality, dicoms_dict, threshold_intensities=False):
+def get_slices(modality, dicoms_dict):
     """
     Return np.array of all dicom slices for a single modality. Dicom slices are sorted subject-wise.
     """
@@ -90,9 +90,6 @@ def get_slices(modality, dicoms_dict, threshold_intensities=False):
         subj_slices_path = [ paths for _, paths in sorted( zip(subj_slices, subj_slices_path), key=lambda pair: pair[0].SliceLocation ) ]
 
         subj_slices = [s.pixel_array for s in subj_slices]
-        if threshold_intensities:
-            subj_site_id = subj.split('_')[1]
-            subj_slices = [ slc for slc in subj_slices if np.sum(slc) > SLC_THRESHOLD_VALUES[subj_site_id] ]
 
         all_slices.extend([s for s in subj_slices])
         all_paths.extend(subj_slices_path)

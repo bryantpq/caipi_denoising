@@ -29,12 +29,16 @@ def main():
     val_i = int( len(X) * config['train_network']['valid_split'] )
     X_train, y_train = X[:val_i], y[:val_i]
     X_valid, y_valid = X[val_i:], y[val_i:]
+
+   # keep = 10000
+   # X_train, y_train = X_train[:keep], y_train[:keep]
+   # X_valid, y_valid = X_valid[:keep], y_valid[:keep]
     
     del X, y
     
     logging.info('Train/Valid split:')
     logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
-    
+
     train_data = np_to_tfdataset(X_train, y_train)
     val_data   = np_to_tfdataset(X_valid, y_valid)
     

@@ -15,21 +15,21 @@ def load_dataset(data_folder):
         logging.info('Loading slices...')
         X_file = os.path.join(data_folder, files[0])
         y_file = os.path.join(data_folder, files[1])
-        
+
         return np.load(X_file), np.load(y_file)
     
     elif len(files) > 2: 
         logging.info('Loading patches...')
         X_patches = load_patches('X', data_folder)
         y_patches = load_patches('y', data_folder)
-        
+
         return X_patches, y_patches
     
     else:
         logging.info('Error not understood number of files in dir: {}'.format(data_folder))
-        
+
         return None, None
-        
+
 
 def write_slices(slices,
                  X_OR_Y,
@@ -82,4 +82,3 @@ def load_patches(X_OR_Y, folder_path, load_n_slices=None, workers=32):
 def create_folders(path):
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-        logging.info("Creating new folder dataset: {}".format(path))

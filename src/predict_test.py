@@ -37,15 +37,10 @@ def main():
         logging.info('Shuffling slices for prediction...')
         shuffle_i = np.random.permutation(len(X_test))
         X_test = X_test[shuffle_i]
+    else:
+        logging.info('Not shuffling slices...')
 
     logging.info(f'X_test.shape: {X_test.shape}')
-    predict_n_slices = config['predict_test']['predict_n_slices']
-    if predict_n_slices is None:
-        logging.info('    Prediction will run on all {} slices.'.format(len(X_test)))
-    else:
-        logging.info('    Prediction will run on first {} slices.'.format(predict_n_slices))
-        X_test = X_test[:predict_n_slices]
-
     
     logging.info('Preprocessing X_test')
     X_test = preprocess_slices(X_test,
@@ -53,6 +48,13 @@ def main():
                                steps=config['predict_test']['X_steps'])
     logging.info('X_test.shape: {}'.format(X_test.shape))
     
+    predict_n_slices = config['predict_test']['predict_n_slices']
+    if predict_n_slices is None:
+        logging.info('    Prediction will run on all {} slices.'.format(len(X_test)))
+    else:
+        logging.info('    Prediction will run on first {} slices.'.format(predict_n_slices))
+        X_test = X_test[:predict_n_slices]
+
     logging.info('')
     logging.info('Creating model...')
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
