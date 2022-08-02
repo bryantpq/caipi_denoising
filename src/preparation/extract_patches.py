@@ -71,7 +71,7 @@ def extract_patches(data,
             total=len(args_list), ncols=80) 
         )
 
-    logging.info(f'Completed. Generated {len(res)} patches for {X_OR_Y}.')
+    logging.info(f'Completed. Generated {len(data) * len(indices)} patches for {X_OR_Y}.')
 
     if return_patches:
         return np.vstack(res)

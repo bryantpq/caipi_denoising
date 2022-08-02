@@ -91,20 +91,21 @@ def main():
 
             y_test = np.array(y_test)
         else:
-            logging.info('Predicting on random patches. No reconstruction...')
+            predict_patch_i = len(patches) // 2
+            logging.info(f'Predicting {predict_patch_i}-th patch of the slices. No reconstruction...')
             new_X, y_test = [], []
             for i in range(len(X_test)):
                 logging.info( '    Slice {} / {}'.format(i + 1, len(X_test)) )
                 slc = X_test[i][:, :, 0]
-
                 patches = extract_patches_2d(slc, patch_size)
-                patch = patches[len(patches) // 2]
+
+                patch = patches[predict_patch_i]
                 new_X.append(patch)
                 patch = np.expand_dims(patch, axis=2)
                 patch = np_to_tfdataset(patch)
                 res = model.predict(patch,
                                     verbose=1,
-                                    batch_size=30)
+                                    batch_size=1)
                 res = res[:,:,:,0]
                 y_test.append(res)
 

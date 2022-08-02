@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from tqdm import tqdm
 
 import numpy as np
 import pydicom as dicom
@@ -79,15 +80,21 @@ def get_slices(modality, dicoms_dict):
     """
     all_slices = []
     all_paths  = []
-    for subj in dicoms_dict.keys():
+    for subj in tqdm(dicoms_dict.keys(), ncols=80):
         subj_slices_path = dicoms_dict[subj][modality]
         subj_slices = []
         for slc_path in subj_slices_path:
             ds = dicom.dcmread(slc_path)
             subj_slices.append(ds)
 
-        subj_slices = [ slices for slices, _ in sorted( zip(subj_slices, subj_slices_path), key=lambda pair: pair[0].SliceLocation ) ]
-        subj_slices_path = [ paths for _, paths in sorted( zip(subj_slices, subj_slices_path), key=lambda pair: pair[0].SliceLocation ) ]
+        subj_slices = [ slices for slices, _ in sorted( 
+            zip(subj_slices, subj_slices_path), 
+            key=lambda pair: pair[0].SliceLocation ) 
+        ]
+        subj_slices_path = [ paths for _, paths in sorted( 
+            zip(subj_slices, subj_slices_path), 
+            key=lambda pair: pair[0].SliceLocation ) 
+        ]
 
         subj_slices = [s.pixel_array for s in subj_slices]
 
@@ -104,7 +111,6 @@ def get_median_slices(X,
     Given a np.array of the sorted slices, return a np.array for only the median slices
     """
     N_SLCS = 256
-    
     n_subjects = X.shape[0] // N_SLCS
 
     outputs = np.empty((0, X.shape[1], X.shape[2], X.shape[3]))
