@@ -134,6 +134,9 @@ def pad_square(X,
 def white_noise(X, 
                 mu=0.0, 
                 sigma=0.2):
+    if type(sigma) == list:
+        sigma = np.random.choice(sigma)
+
     for i in range(len(X)):
         max_val = np.max(X[i])
         noise_map = np.random.normal(mu, sigma * max_val, X[i].shape)

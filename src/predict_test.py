@@ -13,7 +13,7 @@ from preparation.preprocessing_pipeline import preprocess_slices
 from utils.data_io import write_slices
 from utils.create_logger import create_logger
 
-from sklearn.feature_extraction.image import extract_patches_2d, reconstruct_from_patches_2d
+from patchify import patchify, unpatchify
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
     
     if config['predict_test']['shuffle']:
         logging.info('Shuffling slices for prediction...')
-        shuffle_i = np.random.permutation(len(X_test))
+        shuffle_i = np.random.RandomState(seed=config['predict_test']['seed']).permutation(len(X_test))
         X_test = X_test[shuffle_i]
     else:
         logging.info('Not shuffling slices...')
@@ -67,6 +67,7 @@ def main():
     if config['predict_test']['extract_patches']:
         logging.info('Prediction on patches of slices...')
         patch_size = config['predict_test']['input_shape'][1:3]
+        extract_step = config['predict_test']['extract_step']
         
         # TODO
         # Refactor this
@@ -77,7 +78,9 @@ def main():
                 logging.info( '    Slice {} / {}'.format(i + 1, len(X_test)) )
                 slc = X_test[i][:, :, 0]
 
-                patches = extract_patches_2d(slc, patch_size)
+                patches = patchify(slc, patch_size, step=extract_step)
+                patchify_shape = patches.shape[:2]
+                patches = patches.reshape(-1, *patch_size)
                 patches = np.expand_dims(patches, axis=3)
 
                 patches = np_to_tfdataset(patches)
@@ -86,7 +89,8 @@ def main():
                                         batch_size=30)
                 patches = patches[:,:,:,0]
 
-                res_slc = reconstruct_from_patches_2d(patches, slc.shape)
+                patches = patches.reshape(*patchify_shape, *patch_size)
+                res_slc = unpatchify(patches, slc.shape)
                 y_test.append(res_slc)
 
             y_test = np.array(y_test)
@@ -97,7 +101,8 @@ def main():
             for i in range(len(X_test)):
                 logging.info( '    Slice {} / {}'.format(i + 1, len(X_test)) )
                 slc = X_test[i][:, :, 0]
-                patches = extract_patches_2d(slc, patch_size)
+                patches = patchify(slc, patch_size, step=1)
+                patches = patches.reshape(-1, *patch_size)
 
                 patch = patches[predict_patch_i]
                 new_X.append(patch)
