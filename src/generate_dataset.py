@@ -22,7 +22,15 @@ def main():
     
     logging.info(config)
     logging.info('')
-    X_slices, y_slices = get_train_data()
+
+    if config['generate_dataset']['train_leave_one_out']:
+        logging.info('Leaving 1/5 folds out for testing')
+        logging.info('Loading 4/5 folds for training...')
+        X_slices, y_slices, _ = get_train_data(train_loo='train')
+    else:
+        logging.info('Loading whole training dataset...')
+        X_slices, y_slices, _ = get_train_data(train_loo=False)
+
     logging.info('X_slices.shape: {}, y_slices.shape: {}'.format(X_slices.shape, y_slices.shape))
     
     logging.info('Preprocessing X slices...')

@@ -18,13 +18,29 @@ def load_dataset(data_folder):
 
         return np.load(X_file), np.load(y_file)
     
-    elif len(files) > 2: 
+    elif len(files) > 2 and len(files[0].split('_')) < 2:
         logging.info('Loading patches...')
         X_patches = load_patches('X', data_folder)
         y_patches = load_patches('y', data_folder)
 
         return X_patches, y_patches
     
+    elif len(files) > 2 and len(files[0].split('_')) > 2:
+        logging.info('Loading 3D volumes...')
+        logging.info(files)
+
+        X_subj_volumes  = load_volumes('X', data_folder)
+        y_subj_volumes  = load_volumes('y', data_folder)
+        gt_subj_volumes = load_volumes('gt', data_folder)
+
+        subj_volumes = {}
+        for subj in X_subj_volumes.keys():
+            subj_volumes[subj] = (gt_subj_volumes[subj],
+                                   X_subj_volumes[subj],
+                                   y_subj_volumes[subj])
+
+        return subj_volumes
+
     else:
         logging.info('Error not understood number of files in dir: {}'.format(data_folder))
 
@@ -32,11 +48,11 @@ def load_dataset(data_folder):
 
 
 def write_slices(slices,
-                 X_OR_Y,
+                 filename,
                  save_path, 
                  save_dtype):
     create_folders(save_path)
-    save_path = os.path.join(save_path, X_OR_Y + '.npy')
+    save_path = os.path.join(save_path, filename + '.npy')
     slices = slices.astype(save_dtype)
     
     np.save(save_path, slices)
@@ -77,6 +93,21 @@ def load_patches(X_OR_Y, folder_path, load_n_slices=None, workers=32):
     logging.info('    Dataset shape: {}'.format(results.shape))
     
     return results
+
+
+def load_volumes(volume_type, folder_path):
+    files = [ f for f in os.listdir(folder_path) ]
+    files = [ f for f in files if f.split('_')[-1].startswith(volume_type) ]
+    subj_ids = [ '_'.join(f.split('_')[:-1]) for f in files ]
+
+    file_paths = [ os.path.join(folder_path, f) for f in files ]
+    volumes = [ np.load(f) for f in file_paths ]
+
+    res = {}
+    for i in range(len(volumes)):
+        res[subj_ids[i]] = volumes[i]
+
+    return res
 
 
 def create_folders(path):

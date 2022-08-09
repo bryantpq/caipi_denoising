@@ -15,18 +15,25 @@ train_network:
     batch_size: 32
 
 predict_test:
-    train_or_test_set: 'test'
+    train_or_test_set: 'train'
+    train_leave_one_out: True
     model_type: 4
     load_model_path: ''
     extract_patches: True
     input_shape: [null, 256, 256, 1]
-    predict_n_slices: 50
+    extract_step: [64, 64]
     recon_patches: True
-    shuffle: True
+    shuffle: False
+    seed: 24
+    predict_n_slices: null
+    save_mode: 'subject'
     save_dtype: 'float16'
     X_steps:
         - standardize
         - pad_square
+    gt_steps:
+        - standardize
+        - pad_sqaure
     preprocessing_params:
         pad_square:
             pad_value: 0.0

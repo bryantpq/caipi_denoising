@@ -7,25 +7,68 @@ import numpy as np
 import pydicom as dicom
 
 
-SLC_THRESHOLD_VALUES = {
-        '01': 2900000,
-        '07': 5500000,
-        '08': 2900000
-    }
-
-
-def get_train_data():
+def get_train_data(train_loo=False):
     """
     Return np.array of all slices to be used for training and validation.
     """
     MODALITY = '3D_T2STAR_segEPI'
     dicoms_dict = get_data_dict()
     
-    X_train, _ = get_slices(MODALITY, dicoms_dict)
+    X_train, slc_paths = get_slices(MODALITY, dicoms_dict)
     X_train = np.expand_dims(X_train, axis=3)
     y_train = np.copy(X_train)
     
-    return X_train, y_train
+    if train_loo is not False:
+        train, test = train_leave_one_out(X_train, y_train, slc_paths)
+
+        if train_loo == 'train':
+            return train
+        elif train_loo == 'test':
+            return test
+
+    return X_train, y_train, slc_paths
+
+
+def train_leave_one_out(X, y, paths, seed=24):
+    """
+    Split given lists by number of subjects into 80:20 ratio
+    """
+    split_i = int(63 * 0.8)
+    shuffle_i = np.random.RandomState(seed=seed).permutation(int(len(X) / 256))
+    train_subj_i, test_subj_i = shuffle_i[:split_i], shuffle_i[split_i:]
+
+    train_i = []
+    for subj_i in train_subj_i:
+        train_i.extend(list(range(subj_i*256, subj_i*256 + 256)))
+
+    test_i = []
+    for subj_i in test_subj_i:
+        test_i.extend(list(range(subj_i*256, subj_i*256 + 256)))
+
+    train_paths = [paths[i] for i in train_i]
+    test_paths  = [paths[i] for i in test_i]
+
+    id_pos = 6
+    train_subj = []
+    for i in range(0, len(train_i), 256):
+        subj_id = train_paths[i].split('/')[id_pos]
+        train_subj.append(subj_id)
+
+    test_subj = []
+    for i in range(0, len(test_i), 256):
+        subj_id = test_paths[i].split('/')[id_pos]
+        test_subj.append(subj_id)
+
+    logging.info(f'Training indices: {train_subj_i}')
+    logging.info(f'Training subjects: {train_subj}')
+    logging.info('')
+    logging.info(f'Testing indices: {test_subj_i}')
+    logging.info(f'Testing subjects: {test_subj}')
+
+    train = [X[train_i], y[train_i], train_paths]
+    test  = [ X[test_i],  y[test_i],  test_paths]
+
+    return train, test
 
 
 def get_test_data():
@@ -35,7 +78,7 @@ def get_test_data():
     MODALITIES = ['CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
     dicoms_dict = get_data_dict()
     
-    to_stack = []
+    to_stack  = []
     slc_paths = []
     for m in MODALITIES:
         arr, paths = get_slices(m, dicoms_dict)
