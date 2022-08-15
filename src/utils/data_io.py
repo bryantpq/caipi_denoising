@@ -18,16 +18,15 @@ def load_dataset(data_folder):
 
         return np.load(X_file), np.load(y_file)
     
-    elif len(files) > 2 and len(files[0].split('_')) < 2:
+    elif len(files) > 2 and len(files[0].split('_')) < 3:
         logging.info('Loading patches...')
         X_patches = load_patches('X', data_folder)
         y_patches = load_patches('y', data_folder)
 
         return X_patches, y_patches
     
-    elif len(files) > 2 and len(files[0].split('_')) > 2:
+    elif len(files) > 2 and len(files[0].split('_')) > 3:
         logging.info('Loading 3D volumes...')
-        logging.info(files)
 
         X_subj_volumes  = load_volumes('X', data_folder)
         y_subj_volumes  = load_volumes('y', data_folder)
@@ -35,9 +34,13 @@ def load_dataset(data_folder):
 
         subj_volumes = {}
         for subj in X_subj_volumes.keys():
-            subj_volumes[subj] = (gt_subj_volumes[subj],
-                                   X_subj_volumes[subj],
-                                   y_subj_volumes[subj])
+            if len(gt_subj_volumes.keys()) > 0:
+                subj_volumes[subj] = (gt_subj_volumes[subj],
+                                       X_subj_volumes[subj],
+                                       y_subj_volumes[subj])
+            else:
+                subj_volumes[subj] = (X_subj_volumes[subj],
+                                      y_subj_volumes[subj])
 
         return subj_volumes
 
@@ -98,6 +101,11 @@ def load_patches(X_OR_Y, folder_path, load_n_slices=None, workers=32):
 def load_volumes(volume_type, folder_path):
     files = [ f for f in os.listdir(folder_path) ]
     files = [ f for f in files if f.split('_')[-1].startswith(volume_type) ]
+
+    # sort (subj_id, filename)
+    files = [ ('_'.join(f.split('_')[:-1]), f) for f in files ]
+    files.sort(key=lambda x: x[0])
+    files = [ f[1] for f in files ]
     subj_ids = [ '_'.join(f.split('_')[:-1]) for f in files ]
 
     file_paths = [ os.path.join(folder_path, f) for f in files ]

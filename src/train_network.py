@@ -2,6 +2,7 @@ import argparse
 import logging
 import numpy as np
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import tensorflow as tf
 import yaml
 
@@ -30,10 +31,6 @@ def main():
     X_train, y_train = X[:val_i], y[:val_i]
     X_valid, y_valid = X[val_i:], y[val_i:]
 
-   # keep = 10000
-   # X_train, y_train = X_train[:keep], y_train[:keep]
-   # X_valid, y_valid = X_valid[:keep], y_valid[:keep]
-    
     del X, y
     
     logging.info('Train/Valid split:')

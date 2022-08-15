@@ -32,7 +32,7 @@ def gen_pipeline(steps):
             if step == 'normalize':
                 pipeline.append( (normalize, step) )
 
-            elif   step == 'pad_square':
+            elif step == 'pad_square':
                 pipeline.append( (pad_square, step) )
 
             elif step == 'random_xy_flip':

@@ -2,10 +2,12 @@ import argparse
 import logging
 import numpy as np
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+import pdb
 import tensorflow as tf
+from tqdm import tqdm
 import yaml
 
-from evaluation.report_metrics import report_metrics
 from modeling.get_model import get_model
 from preparation.gen_data import get_test_data, get_train_data
 from preparation.prepare_tf_dataset import np_to_tfdataset
@@ -27,7 +29,29 @@ def main():
 
     if config['predict_test']['train_or_test_set'] == 'test':
         logging.info('Loading testing data...')
-        X_test, test_paths = get_test_data()
+        X_test, slc_paths = get_test_data()
+
+        n_volumes = len(X_test) // 256
+        predict_n_test_subjects = config['predict_test']['predict_n_test_subjects']
+
+        if type(predict_n_test_subjects) == list:
+            keep_indices = predict_n_test_subjects
+            predict_n_test_subjects = len(keep_indices)
+        else:
+            keep_indices = np.random.choice(np.arange(n_volumes), predict_n_test_subjects)
+
+        logging.info('Only keeping {}/{} test volumes for prediction'.format(
+                predict_n_test_subjects, len(X_test) // 256 ))
+        new_X = []
+        new_slc_paths = []
+        for i in keep_indices:
+            new_X.append(X_test[i*256: i*256 + 256])
+            new_slc_paths.extend(slc_paths[i*256: i*256 + 256])
+        X_test = np.vstack(new_X)
+        slc_paths = new_slc_paths
+        logging.info('Subject IDs:')
+        logging.info([f.split('/')[6] + '_' + f.split('/')[7]for f in slc_paths[::256] ])
+
     elif config['predict_test']['train_or_test_set'] == 'train': 
         logging.info('Loading training data...')
         if config['predict_test']['train_leave_one_out']:
@@ -52,20 +76,6 @@ def main():
                                    steps=config['predict_test']['gt_steps'])
         logging.info('gt_test.shape: {}'.format(gt_test.shape))
 
-#    if config['predict_test']['shuffle']:
-#        logging.info('Shuffling slices for prediction...')
-#        shuffle_i = np.random.RandomState(seed=config['predict_test']['seed']).permutation(len(X_test))
-#        X_test = X_test[shuffle_i]
-#    else:
-#        logging.info('Not shuffling slices...')
-#
-#    predict_n_slices = config['predict_test']['predict_n_slices']
-#    if predict_n_slices is None:
-#        logging.info('    Prediction will run on all {} slices.'.format(len(X_test)))
-#    else:
-#        logging.info('    Prediction will run on first {} slices.'.format(predict_n_slices))
-#        X_test = X_test[:predict_n_slices]
-
     logging.info('')
     logging.info('Creating model...')
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
@@ -73,7 +83,7 @@ def main():
         model = get_model(model_type=config['predict_test']['model_type'], 
                           input_shape=config['predict_test']['input_shape'],
                           load_model_path=config['predict_test']['load_model_path'])
-    logging.info(model.summary())
+    #logging.info(model.summary())
     
     if config['predict_test']['extract_patches']:
         logging.info('Prediction on patches of slices...')
@@ -83,12 +93,12 @@ def main():
         # TODO
         # Refactor this
         if config['predict_test']['recon_patches']:
-            logging.info('Predicting on all patches then reconstructing...')
+            logging.info('    Collecting patches and running prediction...')
 
             # create all patches
             all_patches = []
             patchify_shape = 0
-            for i in range(len(X_test)):
+            for i in tqdm(range(len(X_test)), ncols=80):
                 slc = X_test[i][:,:,0]
                 patches = patchify(slc, patch_size, step=extract_step)
                 patchify_shape = patches.shape[:2]
@@ -160,21 +170,21 @@ def main():
         for i in range(n_subjects):
             cur_X = X_test[i * 256: i * 256 + 256]
             cur_y = y_test[i * 256: i * 256 + 256]
-            cur_gt = gt_test[i * 256: i * 256 + 256]
             cur_subj_id = slc_paths[i * 256].split('/')[6]
+            cur_modality = slc_paths[i * 256].split('/')[7]
 
-            write_slices(cur_X, cur_subj_id + '_X', 
+            write_slices(cur_X, f'{cur_subj_id}_{cur_modality}_X', 
                     config['results_folder'], config['predict_test']['save_dtype'])
-            write_slices(cur_y, cur_subj_id + '_y', 
+            write_slices(cur_y, f'{cur_subj_id}_{cur_modality}_y', 
                     config['results_folder'], config['predict_test']['save_dtype'])
-            write_slices(cur_gt, cur_subj_id + '_gt', 
-                    config['results_folder'], config['predict_test']['save_dtype'])
+
+            if 'gt_test' in locals():
+                cur_gt = gt_test[i * 256: i * 256 + 256]
+                write_slices(cur_gt, f'{cur_subj_id}_{cur_modality}_gt', 
+                        config['results_folder'], config['predict_test']['save_dtype'])
 
     logging.info('Prediction complete for config: {}'.format(config['config_name']))
     logging.info('Results saved at {}'.format(config['results_folder']))
-
-    #logging.info('Generating metrics...')
-    #report_metrics(X_test, y_test)
 
     
 def create_parser():
