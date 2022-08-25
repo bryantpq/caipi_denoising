@@ -12,23 +12,39 @@ from utils.data_io import write_patches
 def extract_patches(data, 
                     X_OR_Y,
                     save_path,
+                    dimensions=3,
                     patch_size=(32, 32), 
                     extract_step=(1, 1), 
-                    pad_before_ext=True, 
+                    pad_before_ext=False, 
                     pad_value=0.0,
-                    return_patches=False,
                     save_dtype='float16',
-                    workers=32):
+                    workers=32,
+                    return_patches=False):
     
-    size_x, size_y = patch_size
+    logging.debug(data.shape)
     if pad_before_ext:
-        data = np.pad(
-                data, 
-                [(0, 0), (size_x // 2, size_x // 2), (size_y // 2, size_y // 2), (0, 0)], 
-                constant_values=pad_value
-        )
+        if dimensions == 2:
+            size_x, size_y = patch_size
+            data = np.pad(
+                    data, 
+                    [(0, 0), (size_x // 2, size_x // 2), (size_y // 2, size_y // 2), (0, 0)], 
+                    constant_values=pad_value
+            )
+        elif dimensions == 3:
+            size_x, size_y, size_z = patch_size
+            data = np.pad(
+                    data, 
+                    [(0, 0), (size_x // 2, size_x // 2), (size_y // 2, size_y // 2), (size_z // 2, size_z // 2)], 
+                    constant_values=pad_value
+            )
+        logging.debug(data.shape)
     
-    slc0_patches = patchify(data[0,:,:,0], patch_size, step=extract_step)
+    logging.debug(data[0,:,:,0].shape)
+    if dimensions == 2:
+        slc0_patches = patchify(data[0,:,:,0], patch_size, step=extract_step)
+    elif dimensions == 3:
+        vol0_patches = patchify(data[:256,:,:,0], patch_size, step=extract_step)
+    logging.debug(slc0_patches.shape)
     n_patches_per_slice = slc0_patches.shape[0] * slc0_patches.shape[1]
 
     logging.info('Extracting patches from dataset: {}'.format(data.shape))

@@ -4,11 +4,19 @@ import tensorflow as tf
 
 
 def preprocess_slices(data,
+                      dimensions,
                       preprocessing_params,
                       steps):
 
-    assert len(data) != 4, 'data should have 4 dimensions. Given {}'.format(data.shape)
-    
+    if dimensions == 2:
+        assert data.ndim == 3, 'Expected 3 dimensions. Given {}'.format(data.shape)
+
+        data = np.expand_dims(data, axis=3)
+        logging.info('Adding dimension for 2D data, {}'.format(data.shape))
+
+    elif dimensions == 3:
+        assert data.ndim == 4, 'Expected 4 dimensions. Given {}'.format(data.shape)
+
     data = data.astype('float32')
     pipeline = gen_pipeline(steps=steps)
     for func, name in pipeline:
@@ -16,8 +24,9 @@ def preprocess_slices(data,
         if preprocessing_params[name] is None:
             data = func(data)
         else:
+            preprocessing_params[name]['dimensions'] = dimensions
             data = func(data, **preprocessing_params[name])
-        
+
     return data
 
 
@@ -58,24 +67,72 @@ Preprocessing Operations
 """
 
 def normalize(X,
-              mode='batch'):
+              dimensions=3,
+              mode='iterate'):
+    '''
+    Change the distribution of the dataset to have mean=0, std=1
+    '''
+    logging.debug(X.shape)
     if mode == 'batch':
         mean, std = np.mean(X), np.std(X)
 
-        return (X - mean) / std
+        X = (X - mean) / std
 
-    elif mode == 'slice':
+    else:
         for i in range(len(X)):
             mean, std = np.mean(X[i]), np.std(X[i])
 
             X[i] = (X[i] - mean) / std
 
-        return X
+    logging.debug(X.shape)
+    return X
+
+
+def pad_square(X, 
+               dimensions=3,
+               pad_value=0.0):
+    logging.debug(X.shape)
+    if dimensions == 2:
+        pad_len = (X.shape[1] - X.shape[2]) // 2
+        X = np.pad(
+                X, 
+                [(0, 0), (0, 0), (pad_len, pad_len), (0, 0)],
+                constant_values=pad_value
+            )
+    elif dimensions == 3:
+        pad_len = [(0, 0)]
+        largest_dim = np.max(X.shape[1:])
+        for dim in X.shape[1:]:
+            diff = largest_dim - dim
+            pad_len.append( (diff // 2, diff // 2) )
+        X = np.pad(X, pad_len, constant_values=pad_value)
+    
+    logging.debug(X.shape)
+
+    return X
+    
+
+def random_xy_flip(X,
+                   dimensions=3,
+                   seed=24):
+    logging.debug(X.shape)
+    for img_i in range(X.shape[0]):
+        img = X[img_i]
+        img = tf.image.stateless_random_flip_up_down(img, seed=[img_i, seed])
+        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed * seed])
+        X[img_i] = img
+
+    logging.debug(X.shape)
+    return X
 
 
 def standardize(X,
+                dimensions=3,
                 mode='subject'):
-    if mode == 'subject':
+    logging.debug(X.shape)
+    assert mode == 'subject', 'oops'
+
+    if dimensions == 2:
         std_X = np.zeros(X.shape, dtype='float32')
 
         for subj_i in range(int(len(X) / 256)):
@@ -85,72 +142,50 @@ def standardize(X,
             den = max_val - min_val
             std_X[subj_i * 256: subj_i * 256 + 256] = num / den
 
-        return std_X
+    elif dimensions == 3:
+        std_X = np.zeros(X.shape, dtype='float32')
 
-    elif mode == 'batch':
-        min_ds, max_ds = np.min(X), np.max(X)
+        for subj_i in range(len(X)):
+            min_val, max_val = np.min(X[subj_i]), np.max(X[subj_i])
+            num = X[subj_i] - min_val
+            den = max_val - min_val
+            std_X[subj_i] = num / den
 
-        num = X - min_ds
-        den = max_ds - min_ds
-
-        return num / den
-
-    elif mode == 'slice':
-        for i in range(len(X)):
-            min_slc, max_slc = np.min(X[i]), np.max(X[i])
-
-            num = X[i] - min_slc
-            den = max_slc - min_slc
-
-            X[i] = num / den
-
-        return X
+    logging.debug(X.shape)
+    return std_X
 
 
 def threshold_intensities(X, 
+                          dimensions=3,
                           value=5000):
+
+    assert dimensions == 2, f'threshold_intensities not implemented for {dimensions} dimensions.'
+
+    logging.debug(X.shape)
     orig_len = len(X)
     sum_intensities = np.array([ np.sum(X[i]) for i in range(len(X)) ])
     X = X[np.where(sum_intensities > value)]
     new_len = len(X)
-    logging.info(f'        Original n slices: {orig_len}')
-    logging.info(f'        New n slices: {new_len}')
+    logging.debug(X.shape)
 
-    return X
-
-
-def pad_square(X, 
-               pad_value=0.0):
-    pad_len = (X.shape[1] - X.shape[2]) // 2
-    X = np.pad(
-        X, 
-        [(0, 0), (0, 0), (pad_len, pad_len), (0, 0)],
-        constant_values=pad_value
-    )
-    
     return X
 
 
 def white_noise(X, 
+                dimensions=3,
                 mu=0.0, 
                 sigma=0.2):
-    if type(sigma) == list:
-        sigma = np.random.choice(sigma)
-
+    logging.debug(X.shape)
     for i in range(len(X)):
         max_val = np.max(X[i])
-        noise_map = np.random.normal(mu, sigma * max_val, X[i].shape)
+
+        if type(sigma) == list:
+            cur_sigma = np.random.choice(sigma)
+            noise_map = np.random.normal(mu, cur_sigma * max_val, X[i].shape)
+        else:
+            noise_map = np.random.normal(mu, sigma * max_val, X[i].shape)
+
         X[i] = X[i] + noise_map
 
-    return X
-    
-
-def random_xy_flip(X,
-                   seed=24):
-    for img_i in range(X.shape[0]):
-        img = X[img_i]
-        img = tf.image.stateless_random_flip_up_down(img, seed=[img_i, seed])
-        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed * seed])
-        X[img_i] = img
-        
+    logging.debug(X.shape)
     return X

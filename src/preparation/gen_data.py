@@ -7,19 +7,29 @@ import numpy as np
 import pydicom as dicom
 
 
-def get_train_data(train_loo=False):
+def get_train_data(dimensions, train_loo=False):
     """
     Return np.array of all slices to be used for training and validation.
     """
     MODALITY = '3D_T2STAR_segEPI'
     dicoms_dict = get_data_dict()
     
-    X_train, slc_paths = get_slices(MODALITY, dicoms_dict)
-    X_train = np.expand_dims(X_train, axis=3)
+    X_train, slc_paths = get_images(dimensions, MODALITY, dicoms_dict)
+
+    if dimensions == 2:
+        expected_shape = (384, 312)
+        assert X_train.shape[1:] == expected_shape, 'Expected shape: {}, Given shape: {}'.format(expected_shape, X_train.shape[1:])
+    elif dimensions == 3:
+        expected_shape = (384, 312, 256)
+        assert X_train.shape[1:] == expected_shape, 'Expected shape: {}, Given shape: {}'.format(expected_shape, X_train.shape[1:])
+
     y_train = np.copy(X_train)
     
     if train_loo is not False:
-        train, test = train_leave_one_out(X_train, y_train, slc_paths)
+        if dimensions == 2:
+            train, test = train_leave_one_out_2D(X_train, y_train, slc_paths)
+        elif dimensions == 3:
+            train, test = train_leave_one_out_3D(X_train, y_train, slc_paths)
 
         if train_loo == 'train':
             return train
@@ -29,11 +39,12 @@ def get_train_data(train_loo=False):
     return X_train, y_train, slc_paths
 
 
-def train_leave_one_out(X, y, paths, seed=24):
+def train_leave_one_out_2D(X, y, paths, seed=24):
     """
     Split given lists by number of subjects into 80:20 ratio
     """
-    split_i = int(63 * 0.8)
+    N_SUBJECTS = 63
+    split_i = int(N_SUBJECTS * 0.8)
     shuffle_i = np.random.RandomState(seed=seed).permutation(int(len(X) / 256))
     train_subj_i, test_subj_i = shuffle_i[:split_i], shuffle_i[split_i:]
 
@@ -70,8 +81,21 @@ def train_leave_one_out(X, y, paths, seed=24):
 
     return train, test
 
+def train_leave_one_out_3D(X, y, paths, seed=24):
+    N_SUBJECTS = 63
+    split_i = int(N_SUBJECTS * 0.8)
+    shuffle_i = np.random.RandomState(seed=seed).permutation(len(X))
+    train_subj_i, test_subj_i = shuffle_i[:split_i], shuffle_i[split_i:]
 
-def get_test_data():
+    train_paths = [paths[idx] for idx in train_subj_i]
+    test_paths  = [paths[idx] for idx in test_subj_i]
+
+    train = X[train_subj_i], y[train_subj_i], train_paths
+    test = X[test_subj_i], y[test_subj_i], test_paths
+
+    return train, test
+
+def get_test_data(dimensions):
     """
     Return np.array of all slices to be used for testing.
     """
@@ -81,12 +105,18 @@ def get_test_data():
     to_stack  = []
     slc_paths = []
     for m in MODALITIES:
-        arr, paths = get_slices(m, dicoms_dict)
+        arr, paths = get_images(dimensions, m, dicoms_dict)
         to_stack.append(arr)
         slc_paths.extend(paths)
     
     X_test = np.vstack(to_stack)
-    X_test = np.expand_dims(X_test, axis=3)
+
+    if dimensions == 2:
+        expected_shape = (384, 312)
+        assert X_test.shape[1:] == expected_shape, 'Expected shape: {}, Given shape: {}'.format(expected_shape, X_test.shape[1:])
+    elif dimensions == 3:
+        expected_shape = (384, 312, 256)
+        assert X_test.shape[1:] == expected_shape, 'Expected shape: {}, Given shape: {}'.format(expected_shape, X_test.shape[1:])
     
     return X_test, slc_paths
 
@@ -117,11 +147,11 @@ def get_data_dict(json_file_path='/home/quahb/caipi_denoising/data/data.json'):
     return dicoms_dict
 
 
-def get_slices(modality, dicoms_dict):
+def get_images(dimensions, modality, dicoms_dict):
     """
     Return np.array of all dicom slices for a single modality. Dicom slices are sorted subject-wise.
     """
-    all_slices = []
+    all_images = []
     all_paths  = []
     for subj in tqdm(dicoms_dict.keys(), ncols=80):
         subj_slices_path = dicoms_dict[subj][modality]
@@ -141,25 +171,16 @@ def get_slices(modality, dicoms_dict):
 
         subj_slices = [s.pixel_array for s in subj_slices]
 
-        all_slices.extend([s for s in subj_slices])
-        all_paths.extend(subj_slices_path)
+        if dimensions == 2:
+            all_images.extend([s for s in subj_slices])
+            all_paths.extend(subj_slices_path)
+        elif dimensions == 3:
+            all_images.append([s for s in subj_slices])
+            all_paths.append(subj_slices_path)
     
-    return np.stack(all_slices, axis=0), all_paths
+    all_images = np.stack(all_images, axis=0)
 
+    if dimensions == 3:
+        all_images = np.moveaxis(all_images, 1, -1)
 
-def get_median_slices(X, 
-                      left_i=35, 
-                      right_i=221):
-    """
-    Given a np.array of the sorted slices, return a np.array for only the median slices
-    """
-    N_SLCS = 256
-    n_subjects = X.shape[0] // N_SLCS
-
-    outputs = np.empty((0, X.shape[1], X.shape[2], X.shape[3]))
-    for i in range(n_subjects):
-        outputs = np.vstack(
-            [ outputs, X[i * N_SLCS + left_i: i * N_SLCS + right_i] ]
-        )
-
-    return outputs
+    return all_images, all_paths
