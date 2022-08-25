@@ -22,26 +22,26 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     config = yaml.safe_load(args.config)
-    create_logger(config['config_name'])
+    create_logger(config['config_name'], config['logging_level'])
 
     logging.info(config)
     logging.info('')
 
     if config['predict_test']['train_or_test_set'] == 'test':
         logging.info('Loading testing data...')
-        X_test, slc_paths = get_test_data()
+        X_test, slc_paths = get_test_data(config['dimensions'])
 
         n_volumes = len(X_test) // 256
-        predict_n_test_subjects = config['predict_test']['predict_n_test_subjects']
+        test_n_subjects = config['predict_test']['test_n_subjects']
 
-        if type(predict_n_test_subjects) == list:
-            keep_indices = predict_n_test_subjects
-            predict_n_test_subjects = len(keep_indices)
+        if type(test_n_subjects) == list:
+            keep_indices = test_n_subjects
+            test_n_subjects = len(keep_indices)
         else:
-            keep_indices = np.random.choice(np.arange(n_volumes), predict_n_test_subjects)
+            keep_indices = np.random.choice(np.arange(n_volumes), test_n_subjects)
 
         logging.info('Only keeping {}/{} test volumes for prediction'.format(
-                predict_n_test_subjects, len(X_test) // 256 ))
+                test_n_subjects, len(X_test) // 256 ))
         new_X = []
         new_slc_paths = []
         for i in keep_indices:
@@ -56,15 +56,16 @@ def main():
         logging.info('Loading training data...')
         if config['predict_test']['train_leave_one_out']:
             logging.info('Loading 1/5 folds left out from training for prediction...')
-            gt_test, X_test, slc_paths = get_train_data(train_loo='test')
+            gt_test, X_test, slc_paths = get_train_data(config['dimensions'], train_loo='test')
         else:
             logging.info('Loading 4/5 folds used in training for prediction...')
-            gt_test, X_test, slc_paths = get_train_data(train_loo='train')
+            gt_test, X_test, slc_paths = get_train_data(config['dimensions'], train_loo='train')
     
     logging.info(f'X_test.shape: {X_test.shape}')
     
     logging.info('Preprocessing X_test')
     X_test = preprocess_slices(X_test,
+                               config['dimensions'],
                                config['predict_test']['preprocessing_params'],
                                steps=config['predict_test']['X_steps'])
     logging.info('X_test.shape: {}'.format(X_test.shape))
@@ -72,22 +73,22 @@ def main():
     if 'gt_test' in locals():
         logging.info('Preprocessing gt_test')
         gt_test = preprocess_slices(gt_test,
-                                   config['predict_test']['preprocessing_params'],
-                                   steps=config['predict_test']['gt_steps'])
+                                    config['dimensions'],
+                                    config['predict_test']['preprocessing_params'],
+                                    steps=config['predict_test']['gt_steps'])
         logging.info('gt_test.shape: {}'.format(gt_test.shape))
 
     logging.info('')
     logging.info('Creating model...')
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
-        model = get_model(model_type=config['predict_test']['model_type'], 
-                          input_shape=config['predict_test']['input_shape'],
+        model = get_model(model_type=config['model_type'], 
+                          input_shape=config['input_shape'],
                           load_model_path=config['predict_test']['load_model_path'])
-    #logging.info(model.summary())
     
     if config['predict_test']['extract_patches']:
         logging.info('Prediction on patches of slices...')
-        patch_size = config['predict_test']['input_shape'][1:3]
+        patch_size = config['input_shape'][1:3]
         extract_step = config['predict_test']['extract_step']
         
         # TODO
@@ -163,8 +164,8 @@ def main():
 
     logging.info('Saving results...')
     if config['predict_test']['save_mode'] == 'all':
-        write_slices(X_test, 'X', config['results_folder'], config['predict_test']['save_dtype'])
-        write_slices(y_test, 'y', config['results_folder'], config['predict_test']['save_dtype'])
+        write_slices(X_test, 'X', config['results_folder'], config['save_dtype'])
+        write_slices(y_test, 'y', config['results_folder'], config['save_dtype'])
     elif config['predict_test']['save_mode'] == 'subject':
         n_subjects = len(X_test) // 256
         for i in range(n_subjects):
@@ -173,15 +174,24 @@ def main():
             cur_subj_id = slc_paths[i * 256].split('/')[6]
             cur_modality = slc_paths[i * 256].split('/')[7]
 
+            # clean up images
+            cur_X = np.moveaxis(cur_X, 0, 2)
+            cur_X = cur_X[:, 36:384 - 36, :]
+            cur_y = np.moveaxis(cur_y, 0, 2)
+            cur_y = cur_y[:, 36:384 - 36, :]
+
             write_slices(cur_X, f'{cur_subj_id}_{cur_modality}_X', 
-                    config['results_folder'], config['predict_test']['save_dtype'])
+                    config['results_folder'], config['save_dtype'])
             write_slices(cur_y, f'{cur_subj_id}_{cur_modality}_y', 
-                    config['results_folder'], config['predict_test']['save_dtype'])
+                    config['results_folder'], config['save_dtype'])
 
             if 'gt_test' in locals():
                 cur_gt = gt_test[i * 256: i * 256 + 256]
+                cur_gt = np.moveaxis(cur_gt, 0, 2)
+                cur_gt = cur_gt[:, 36:384 - 36, :, 0]
+
                 write_slices(cur_gt, f'{cur_subj_id}_{cur_modality}_gt', 
-                        config['results_folder'], config['predict_test']['save_dtype'])
+                        config['results_folder'], config['save_dtype'])
 
     logging.info('Prediction complete for config: {}'.format(config['config_name']))
     logging.info('Results saved at {}'.format(config['results_folder']))

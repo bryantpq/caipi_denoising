@@ -1,10 +1,12 @@
 config_name: 'base_config'
 data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
 
+dimensions: 3
+
 generate_dataset:
+    train_or_test_set: 'train'
     train_leave_one_out: False
     extract_patches: True
-    save_dtype: 'float16'
 
     X_steps:
         - standardize
@@ -37,6 +39,8 @@ generate_dataset:
             mu: 0.0
             sigma: 0.10
 
+save_dtype: 'float16'
+logging_level: 'info'
 workers: 3
 gpus:
 - /GPU:0

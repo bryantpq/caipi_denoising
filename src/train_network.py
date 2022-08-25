@@ -17,12 +17,14 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     config = yaml.safe_load(args.config)
-    create_logger(config['config_name'])
+    create_logger(config['config_name'], config['logging_level'])
 
     logging.info(config)
     logging.info('')
     logging.info('Loading training dataset from: {}'.format(config['data_folder']))
     X, y = load_dataset(config['data_folder'])
+    logging.debug(X.shape)
+    logging.debug(y.shape)
 
     shuffle_i = np.random.RandomState(seed=42).permutation(len(X))
     X, y = X[shuffle_i], y[shuffle_i]
@@ -44,15 +46,15 @@ def main():
     train_params = config['train_network']
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
-        model = get_model(model_type=train_params['model_type'], 
-                          input_shape=train_params['input_shape'],
+        model = get_model(model_type=config['model_type'], 
+                          input_shape=config['input_shape'],
                           load_model_path=train_params['load_model_path'],
                           learning_rate=train_params['learning_rate'])
 
     logging.info(model.summary())
 
     cb_list = get_training_cb(patience=train_params['patience'],
-                              model_type=train_params['model_type'],
+                              model_type=config['model_type'],
                               save_path=os.path.join(config['save_model_folder'], config['config_name']))
     
     history = model.fit(train_data,

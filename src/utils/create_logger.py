@@ -3,13 +3,18 @@ import logging
 import os
 import sys
 
-def create_logger(config_name):
+def create_logger(config_name, logging_level):
     log_folder = '/home/quahb/caipi_denoising/logs'
     date = datetime.date.today()
     fname = os.path.join(log_folder, config_name + '_{}.log'.format(date))
 
+    if logging_level.lower() == 'info':
+        level = logging.INFO
+    else:
+        level = logging.DEBUG
+
     logging.basicConfig(
-            level=logging.INFO,
+            level=level,
             format='%(asctime)s %(filename)20s:%(lineno)d [%(levelname)s]: %(message)s',
             datefmt='%Y/%m/%d %H:%M:%S',
             handlers=[
