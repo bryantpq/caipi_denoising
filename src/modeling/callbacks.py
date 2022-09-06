@@ -4,9 +4,11 @@ import tensorflow as tf
 from datetime import datetime, date
 
 
-def get_training_cb(patience=3, 
+def get_training_cb(config_name,
+                    patience=3, 
                     model_type=None,
-                    save_path=None):
+                    save_path='/home/quahb/caipi_denoising/models',
+                    tensorboard_path='/home/quahb/caipi_denoising/logs/fit'):
     """
     Return list of callbacks to be used in model.fit(cb=cb)
     """
@@ -16,8 +18,7 @@ def get_training_cb(patience=3,
                                                     patience=patience)
     
     # CB: Checkpoint
-    date_s = str(date.today())
-    save_path = save_path + '_' + date_s
+    save_path = os.path.join(save_path, config_name + '_' + str(date.today()))
     
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -32,7 +33,7 @@ def get_training_cb(patience=3,
                                                        mode='min')
 
     # CB: Tensorboard info
-    log_dir = "/home/quahb/caipi_denoising/logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = os.path.join(tensorboard_path, config_name + '_' + str(date.today()))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
         logging.info('Creating new folder for TensorBoard logging: {}'.format(log_dir))

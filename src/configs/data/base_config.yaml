@@ -1,22 +1,20 @@
 config_name: 'base_config'
 data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
 
-dimensions: 3
+dimensions: 2
 
 generate_dataset:
     train_or_test_set: 'train'
-    train_leave_one_out: False
+    n_folds: 10
     extract_patches: True
 
     X_steps:
         - standardize
-        - threshold_intensities
         - pad_square
         - random_xy_flip
         - white_noise
     y_steps:
         - standardize
-        - threshold_intensities
         - pad_square
         - random_xy_flip
     extract_patches_params:
@@ -37,7 +35,7 @@ generate_dataset:
             value: 5000
         white_noise:
             mu: 0.0
-            sigma: 0.10
+            sigma: 0.07
 
 save_dtype: 'float16'
 logging_level: 'info'

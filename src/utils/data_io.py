@@ -2,13 +2,14 @@ import logging
 import multiprocessing as mp
 import numpy as np
 import os
+import pdb
 import tqdm
 
 """
 Save/Load by slices/patches rather than whole array to track progress
 """
 
-def load_dataset(data_folder):
+def load_dataset(data_folder, n_folds=None, exclude_fold=None):
     files = os.listdir(data_folder)
     
     if len(files) == 2:
@@ -24,6 +25,22 @@ def load_dataset(data_folder):
         y_patches = load_patches('y', data_folder)
 
         return X_patches, y_patches
+
+    # load slices from every fold other
+    elif len(files) > 2 and len(files[0].split('_')) == 3:
+        assert type(n_folds) is int, 'Not understood n_folds: {}'.format(n_folds)
+        assert exclude_fold > -1 and exclude_fold < n_folds, 'Unrecognized fold to exclude: {}'.format(exclude_fold)
+
+        load_folds = set(range(n_folds)) - {exclude_fold}
+        print('Loading patches from folds: {}'.format(load_folds))
+        logging.info('Loading patches from folds: {}'.format(load_folds))
+
+        X_stack, y_stack = [], []
+        for fold_i in load_folds:
+            X_stack.append(load_patches(f'X_f{fold_i}', data_folder))
+            y_stack.append(load_patches(f'y_f{fold_i}', data_folder))
+
+        return np.vstack(X_stack), np.vstack(y_stack)
     
     elif len(files) > 2 and len(files[0].split('_')) > 3:
         logging.info('Loading 3D volumes...')
@@ -63,33 +80,33 @@ def write_slices(slices,
     
 def write_patches(slc_i, 
                   patches,
-                  X_OR_Y,
+                  file_postfix,
                   save_dtype,
                   save_path):
     create_folders(save_path)
-    save_path = os.path.join(save_path, str(slc_i) + '_{}.npy'.format(X_OR_Y))
+    save_path = os.path.join(save_path, str(slc_i) + '_{}.npy'.format(file_postfix))
     patches = patches.astype(save_dtype)
 
     np.save(save_path, patches)  
 
 
-def load_patches(X_OR_Y, folder_path, load_n_slices=None, workers=32):
+def load_patches(file_postfix, folder_path, load_n_slices=None, workers=32):
     
-    files = [ f for f in os.listdir(folder_path) if X_OR_Y in f.split('.')[0] ]
+    files = [ f for f in os.listdir(folder_path) if file_postfix in f.split('.')[0] ]
 
     # sort file names
     files = [ ( int(fname.split('_')[0]), fname ) for fname in files ]
     files.sort(key=lambda x: x[0])
     files = [ f[1] for f in files ]
 
-    logging.info('    Found {}{} files to load at {}'.format(len(files), X_OR_Y, folder_path))
+    logging.info('    Found {}{} files to load at {}'.format(len(files), file_postfix, folder_path))
 
     if load_n_slices is not None: files = files[:load_n_slices]
 
     results = []
     with mp.Pool(workers) as pool:
         paths = [ os.path.join(folder_path, f) for f in files ]
-        results = list(tqdm.tqdm(pool.imap(np.load, paths), total=len(paths), ncols=80))
+        results = list(tqdm.tqdm(pool.imap(np.load, paths), total=len(paths), ncols=80, desc=file_postfix))
     results = np.vstack(results)
     
     logging.info('    Loading patches complete.')

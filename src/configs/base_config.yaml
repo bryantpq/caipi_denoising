@@ -2,9 +2,11 @@ config_name: 'base_config'
 data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
 results_folder: '/home/quahb/caipi_denoising/data/results/base_config'
 
-dimensions: 3
-model_type: 2
+dimensions: 2
+model_type: 3
 input_shape: [null, 256, 256, 1]
+n_folds: null
+test_fold: null
 
 train_network:
     load_model_path: null 
@@ -12,7 +14,7 @@ train_network:
     n_epochs: 40
     learning_rate: 0.001
     init_epoch: 0
-    patience: 4
+    patience: 5
     batch_size: 32
 
 predict_test:
@@ -47,7 +49,6 @@ predict_test:
             mode: 'batch'
 
 save_dtype: 'float16'
-save_model_folder: '/home/quahb/caipi_denoising/models'
 logging_level: 'info'
 workers: 5
 gpus:

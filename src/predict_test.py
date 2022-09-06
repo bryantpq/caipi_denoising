@@ -9,14 +9,13 @@ from tqdm import tqdm
 import yaml
 
 from modeling.get_model import get_model
-from preparation.gen_data import get_test_data, get_train_data
+from preparation.gen_data import get_test_data, get_train_data, get_registered_test_data
 from preparation.prepare_tf_dataset import np_to_tfdataset
 from preparation.preprocessing_pipeline import preprocess_slices
 from utils.data_io import write_slices
 from utils.create_logger import create_logger
 
 from patchify import patchify, unpatchify
-
 
 def main():
     parser = create_parser()
@@ -27,49 +26,75 @@ def main():
     logging.info(config)
     logging.info('')
 
-    if config['predict_test']['train_or_test_set'] == 'test':
-        logging.info('Loading testing data...')
-        X_test, slc_paths = get_test_data(config['dimensions'])
+    if config['predict_test']['train_or_test_set'] == 'train': 
+        logging.info('Loading training data...')
+        if config['predict_test']['train_leave_one_out']:
+            logging.info('Loading 1/5 folds left out from training for prediction...')
+            gt_test, X_test, paths = get_train_data(config['dimensions'], train_loo='test')
+        else:
+            logging.info('Loading 4/5 folds used in training for prediction...')
+            gt_test, X_test, paths = get_train_data(config['dimensions'], train_loo='train')
+    
+    elif 'test' in config['predict_test']['train_or_test_set']:
+        if 'reg' in config['predict_test']['train_or_test_set']:
+            logging.info('Loading registered test data...')
+            X_test, paths = get_registered_test_data(
+                    config['dimensions'], config['n_folds'], config['test_fold']
+            )
+            logging.info(X_test.shape)
+        else:
+            logging.info('Loading testing data...')
+            X_test, paths = get_test_data(config['dimensions'])
 
-        n_volumes = len(X_test) // 256
+        if config['dimensions'] == 2:
+            n_volumes = len(X_test) // 256
+        elif config['dimensions'] == 3:
+            n_volumes = len(X_test)
+
         test_n_subjects = config['predict_test']['test_n_subjects']
 
         if type(test_n_subjects) == list:
             keep_indices = test_n_subjects
             test_n_subjects = len(keep_indices)
-        else:
+            logging.info(f'Only running inference on subject indices {keep_indices}')
+        elif test_n_subjects is None:
+            keep_indices = range(n_volumes)
+            logging.info(f'Keeping all {n_volumes} for inference')
+        elif type(test_n_subjects) == int:
             keep_indices = np.random.choice(np.arange(n_volumes), test_n_subjects)
+            logging.info('Only keeping {}/{} test volumes for inference'.format(
+                    test_n_subjects, len(X_test) // 256 ))
 
-        logging.info('Only keeping {}/{} test volumes for prediction'.format(
-                test_n_subjects, len(X_test) // 256 ))
-        new_X = []
-        new_slc_paths = []
-        for i in keep_indices:
-            new_X.append(X_test[i*256: i*256 + 256])
-            new_slc_paths.extend(slc_paths[i*256: i*256 + 256])
-        X_test = np.vstack(new_X)
-        slc_paths = new_slc_paths
-        logging.info('Subject IDs:')
-        logging.info([f.split('/')[6] + '_' + f.split('/')[7]for f in slc_paths[::256] ])
-
-    elif config['predict_test']['train_or_test_set'] == 'train': 
-        logging.info('Loading training data...')
-        if config['predict_test']['train_leave_one_out']:
-            logging.info('Loading 1/5 folds left out from training for prediction...')
-            gt_test, X_test, slc_paths = get_train_data(config['dimensions'], train_loo='test')
+        # filter images and paths to keep
+        if config['dimensions'] == 2:
+            new_X = [ X_test[i * 256: i * 256 + 256] for i in keep_indices ]
         else:
-            logging.info('Loading 4/5 folds used in training for prediction...')
-            gt_test, X_test, slc_paths = get_train_data(config['dimensions'], train_loo='train')
-    
+            new_X = [ np.expand_dims(X_test[i], 0) for i in keep_indices ]
+        X_test = np.vstack(new_X)
+
+        new_paths = []
+        for i in keep_indices:
+            if 'reg' in config['predict_test']['train_or_test_set']:
+                new_paths.append( paths[i] )
+            else:
+                new_paths.extend( paths[i*256: i*256 + 256] )
+        paths = new_paths
+
+
+        logging.info('Subject IDs:')
+        if 'reg' in config['predict_test']['train_or_test_set']:
+            logging.info([ f.split('/')[6] + '_' + f.split('/')[7] for f in paths ])
+        else:
+            logging.info([ f.split('/')[6] + '_' + f.split('/')[7] for f in paths[::256]])
+
     logging.info(f'X_test.shape: {X_test.shape}')
-    
     logging.info('Preprocessing X_test')
     X_test = preprocess_slices(X_test,
                                config['dimensions'],
                                config['predict_test']['preprocessing_params'],
                                steps=config['predict_test']['X_steps'])
     logging.info('X_test.shape: {}'.format(X_test.shape))
-    
+
     if 'gt_test' in locals():
         logging.info('Preprocessing gt_test')
         gt_test = preprocess_slices(gt_test,
@@ -80,6 +105,7 @@ def main():
 
     logging.info('')
     logging.info('Creating model...')
+
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
         model = get_model(model_type=config['model_type'], 
@@ -167,18 +193,23 @@ def main():
         write_slices(X_test, 'X', config['results_folder'], config['save_dtype'])
         write_slices(y_test, 'y', config['results_folder'], config['save_dtype'])
     elif config['predict_test']['save_mode'] == 'subject':
-        n_subjects = len(X_test) // 256
-        for i in range(n_subjects):
+        for i in range(test_n_subjects):
             cur_X = X_test[i * 256: i * 256 + 256]
             cur_y = y_test[i * 256: i * 256 + 256]
-            cur_subj_id = slc_paths[i * 256].split('/')[6]
-            cur_modality = slc_paths[i * 256].split('/')[7]
 
             # clean up images
-            cur_X = np.moveaxis(cur_X, 0, 2)
+            cur_X = np.moveaxis(cur_X, 0, 2) # (256, 384, 384) -> (384, 384, 256)
             cur_X = cur_X[:, 36:384 - 36, :]
             cur_y = np.moveaxis(cur_y, 0, 2)
             cur_y = cur_y[:, 36:384 - 36, :]
+
+            if config['predict_test']['train_or_test_set'] == 'test':
+                cur_subj_id = paths[i * 256].split('/')[6]
+                cur_modality = paths[i * 256].split('/')[7]
+            elif config['predict_test']['train_or_test_set'] == 'reg_test':
+                cur_path = paths[i]
+                cur_subj_id = cur_path.split('/')[6]
+                cur_modality = cur_path.split('/')[7].split('.')[0]
 
             write_slices(cur_X, f'{cur_subj_id}_{cur_modality}_X', 
                     config['results_folder'], config['save_dtype'])

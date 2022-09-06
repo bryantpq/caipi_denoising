@@ -22,7 +22,14 @@ def main():
     logging.info(config)
     logging.info('')
     logging.info('Loading training dataset from: {}'.format(config['data_folder']))
-    X, y = load_dataset(config['data_folder'])
+
+    if config['test_fold'] is not None and config['n_folds'] is not None:
+        load_folds = set(range(config['n_folds'])) - {config['test_fold']}
+        logging.info(f'Loading folds: {load_folds}')
+
+    X, y = load_dataset(config['data_folder'], 
+                        n_folds=config['n_folds'],
+                        exclude_fold=config['test_fold'])
     logging.debug(X.shape)
     logging.debug(y.shape)
 
@@ -53,10 +60,10 @@ def main():
 
     logging.info(model.summary())
 
-    cb_list = get_training_cb(patience=train_params['patience'],
-                              model_type=config['model_type'],
-                              save_path=os.path.join(config['save_model_folder'], config['config_name']))
-    
+    cb_list = get_training_cb(config['config_name'],
+                              patience=train_params['patience'],
+                              model_type=config['model_type'])
+
     history = model.fit(train_data,
                         validation_data=val_data,
                         batch_size=train_params['batch_size'],
