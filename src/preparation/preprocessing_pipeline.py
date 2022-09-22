@@ -163,9 +163,11 @@ def threshold_intensities(X,
 
     logging.debug(X.shape)
     orig_len = len(X)
+    logging.info(f'    Before: {orig_len}')
     sum_intensities = np.array([ np.sum(X[i]) for i in range(len(X)) ])
     X = X[np.where(sum_intensities > value)]
     new_len = len(X)
+    logging.info(f'    After: {new_len}')
     logging.debug(X.shape)
 
     return X

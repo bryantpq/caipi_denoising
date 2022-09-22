@@ -123,35 +123,17 @@ def get_model2(input_shape):
     return Model(inputs=[in_layer], outputs=[output])
 
 
-def get_model3(input_shape):
-    n_layers = 15
+def get_model3(input_shape, n_hidden_layers=15, kernel_size=3):
     in_layer  = Input(shape=input_shape, dtype=tf.float32)
 
-    block = layers.Conv2D(64, (3, 3), padding='same', strides=1)(in_layer)
+    block = layers.Conv2D(64, (kernel_size, kernel_size), padding='same', strides=1)(in_layer)
     block = layers.Activation('relu')(block)
 
-    for i in range(n_layers):
-        block = layers.Conv2D(64, (3, 3), padding='same', strides=1)(block)
+    for i in range(n_hidden_layers):
+        block = layers.Conv2D(64, (kernel_size, kernel_size), padding='same', strides=1)(block)
         block = layers.BatchNormalization()(block)
         block = layers.Activation('relu')(block)
 
-    output = layers.Conv2D(1, kernel_size=(3, 3), activation='sigmoid', padding='same')(block)
-    
-    return Model(inputs=[in_layer], outputs=[output])
-
-
-def get_model4(input_shape):
-    n_layers = 20
-    in_layer  = Input(shape=input_shape, dtype=tf.float32)
-
-    block = layers.Conv2D(64, (3, 3), padding='same', strides=1)(in_layer)
-    block = layers.Activation('relu')(block)
-
-    for i in range(n_layers):
-        block = layers.Conv2D(64, (3, 3), padding='same', strides=1)(block)
-        block = layers.BatchNormalization()(block)
-        block = layers.Activation('relu')(block)
-
-    output = layers.Conv2D(1, kernel_size=(3, 3), activation='sigmoid', padding='same')(block)
+    output = layers.Conv2D(1, kernel_size=(kernel_size, kernel_size), activation='sigmoid', padding='same')(block)
     
     return Model(inputs=[in_layer], outputs=[output])

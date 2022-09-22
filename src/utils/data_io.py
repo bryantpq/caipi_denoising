@@ -32,7 +32,6 @@ def load_dataset(data_folder, n_folds=None, exclude_fold=None):
         assert exclude_fold > -1 and exclude_fold < n_folds, 'Unrecognized fold to exclude: {}'.format(exclude_fold)
 
         load_folds = set(range(n_folds)) - {exclude_fold}
-        print('Loading patches from folds: {}'.format(load_folds))
         logging.info('Loading patches from folds: {}'.format(load_folds))
 
         X_stack, y_stack = [], []
@@ -99,7 +98,7 @@ def load_patches(file_postfix, folder_path, load_n_slices=None, workers=32):
     files.sort(key=lambda x: x[0])
     files = [ f[1] for f in files ]
 
-    logging.info('    Found {}{} files to load at {}'.format(len(files), file_postfix, folder_path))
+    logging.info('    {} {} files at {}'.format(len(files), file_postfix, folder_path))
 
     if load_n_slices is not None: files = files[:load_n_slices]
 

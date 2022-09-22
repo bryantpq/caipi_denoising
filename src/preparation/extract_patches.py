@@ -47,18 +47,18 @@ def extract_patches(data,
     logging.debug(slc0_patches.shape)
     n_patches_per_slice = slc0_patches.shape[0] * slc0_patches.shape[1]
 
-    logging.info('Extracting patches from dataset: {}'.format(data.shape))
-    logging.info('Estimating space required to save patches...')
-    logging.info('Assuming data is float16 = 2bytes per pixel')
-    logging.info('    Number of slices:    {}'.format(len(data)))
-    logging.info('    Patches per slice:   {}'.format(n_patches_per_slice))
-    logging.info('    Patch size:          {}'.format(patch_size))
-    logging.info('    Save data type:      {}'.format(save_dtype))
-    logging.info('        Per slice: {} * {} * 2 = {:.2e} bytes'.format(n_patches_per_slice, patch_size, 
-                                                       n_patches_per_slice * patch_size[0] * patch_size[1] * 2))
-    logging.info('            Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), n_patches_per_slice, patch_size, 
-                                                        len(data) * n_patches_per_slice * patch_size[0] * patch_size[1] * 2))
-    logging.info('')
+    logging.debug('Extracting patches from dataset: {}'.format(data.shape))
+    logging.debug('Estimating space required to save patches...')
+    logging.debug('Assuming data is float16 = 2bytes per pixel')
+    logging.debug('  Number of slices:    {}'.format(len(data)))
+    logging.debug('  Patches per slice:   {}'.format(n_patches_per_slice))
+    logging.debug('  Patch size:          {}'.format(patch_size))
+    logging.debug('  Save data type:      {}'.format(save_dtype))
+    logging.debug('    Per slice: {} * {} * 2 = {:.2e} bytes'.format(n_patches_per_slice, patch_size, 
+            n_patches_per_slice * patch_size[0] * patch_size[1] * 2))
+    logging.info('   Total: {} * {} * {} * 2 = {:.2e} bytes'.format(len(data), n_patches_per_slice, patch_size, 
+            len(data) * n_patches_per_slice * patch_size[0] * patch_size[1] * 2))
+    logging.debug('')
     
     res = []
     with mp.Pool(workers) as pool:

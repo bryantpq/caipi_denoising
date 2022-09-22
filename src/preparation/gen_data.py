@@ -134,7 +134,7 @@ def get_masks():
 
         for mask, path in zip(arr, paths):
             subj_id = path.split('/')[6]
-            mask_pp = _process_mask(mask, m)
+            mask_pp = _threshold_mask(mask, m)
 
             if subj_id not in result:
                 result[subj_id] = {m: mask_pp}
@@ -143,7 +143,7 @@ def get_masks():
 
     return result
 
-def _process_mask(mask, mask_type):
+def _threshold_mask(mask, mask_type):
     wm_threshold = 0.0
     vein_threshold = 0.0
     lesion_threshold = 0.6

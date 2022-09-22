@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from tensorflow.keras import layers, losses, Sequential, Input
 from tensorflow.keras.models import Model
-from modeling.models import Denoiser, get_model1, get_model2, get_model3, get_model4
+from modeling.models import Denoiser, get_model1, get_model2, get_model3
 
 
 def get_model(model_type, 
@@ -30,10 +30,6 @@ def get_model(model_type,
     elif model_type == 3:
         logging.info('    Using model type 3')
         model = get_model3(input_shape=img_size)
-
-    elif model_type == 4:
-        logging.info('    Using model type 4')
-        model = get_model4(input_shape=img_size)
 
     model.build(input_shape=input_shape)
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
