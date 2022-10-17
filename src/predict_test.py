@@ -41,11 +41,13 @@ def main():
             X_test, paths = get_registered_test_data(
                     config['dimensions'], config['n_folds'], config['test_fold']
             )
-            logging.info(X_test.shape)
         else:
             logging.info('Loading testing data...')
-            X_test, paths = get_test_data(config['dimensions'])
+            X_test, paths = get_test_data(
+                    config['dimensions'], config['n_folds'], config['test_fold']
+            )
 
+        logging.info(X_test.shape)
         if config['dimensions'] == 2:
             n_volumes = len(X_test) // 256
         elif config['dimensions'] == 3:
@@ -56,7 +58,7 @@ def main():
         if type(test_n_subjects) == list:
             keep_indices = test_n_subjects
             test_n_subjects = len(keep_indices)
-            logging.info(f'Only running inference on subject indices {keep_indices}')
+            logging.info(f'Only running inference on given subject indices: {keep_indices}')
         elif test_n_subjects is None:
             keep_indices = range(n_volumes)
             logging.info(f'Keeping all {n_volumes} for inference')
@@ -65,27 +67,21 @@ def main():
             logging.info('Only keeping {}/{} test volumes for inference'.format(
                     test_n_subjects, len(X_test) // 256 ))
 
-        # filter images and paths to keep
+        # filter images to keep
         if config['dimensions'] == 2:
             new_X = [ X_test[i * 256: i * 256 + 256] for i in keep_indices ]
         else:
             new_X = [ np.expand_dims(X_test[i], 0) for i in keep_indices ]
         X_test = np.vstack(new_X)
 
-        new_paths = []
-        for i in keep_indices:
-            if 'reg' in config['predict_test']['train_or_test_set']:
-                new_paths.append( paths[i] )
-            else:
-                new_paths.extend( paths[i*256: i*256 + 256] )
-        paths = new_paths
-
+        # filter paths to keep
+        paths = [ paths[i] for i in keep_indices ]
 
         logging.info('Subject IDs:')
         if 'reg' in config['predict_test']['train_or_test_set']:
-            logging.info([ f.split('/')[6] + '_' + f.split('/')[7] for f in paths ])
+            logging.info([ f.split('/')[6] + '_' + f.split('/')[7].split('.')[0] for f in paths ])
         else:
-            logging.info([ f.split('/')[6] + '_' + f.split('/')[7] for f in paths[::256]])
+            logging.info([ f.split('/')[6] + '_' + f.split('/')[7] for f in paths ])
 
     logging.info(f'X_test.shape: {X_test.shape}')
     logging.info('Preprocessing X_test')
@@ -203,11 +199,11 @@ def main():
             cur_y = np.moveaxis(cur_y, 0, 2)
             cur_y = cur_y[:, 36:384 - 36, :]
 
+            cur_path = paths[i]
             if config['predict_test']['train_or_test_set'] == 'test':
-                cur_subj_id = paths[i * 256].split('/')[6]
-                cur_modality = paths[i * 256].split('/')[7]
+                cur_subj_id = cur_path.split('/')[6]
+                cur_modality = cur_path.split('/')[7]
             elif config['predict_test']['train_or_test_set'] == 'reg_test':
-                cur_path = paths[i]
                 cur_subj_id = cur_path.split('/')[6]
                 cur_modality = cur_path.split('/')[7].split('.')[0]
 

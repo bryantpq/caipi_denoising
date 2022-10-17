@@ -39,25 +39,49 @@ def get_train_data(dimensions, train_loo=False):
     return X_train, y_train, slc_paths
 
 
-def get_test_data(dimensions):
+def get_test_data(dimensions, n_folds=None, keep_fold=None):
     """
     Return np.array of all slices to be used for testing.
     """
+    global N_SUBJECTS
+
     MODALITIES = ['CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
     data_dict = get_data_dict()
     
+    single_fold = n_folds is not None and keep_fold is not None
+    if single_fold:
+        logging.info(f'Only keeping subjects from fold {keep_fold}')
+        kf = KFold(n_folds, shuffle=True, random_state=42)
+        for fold_i, idxs in enumerate(kf.split(range(N_SUBJECTS))):
+            if fold_i == keep_fold:
+                train_i, test_i = idxs
+                keep_idxs = test_i
+
     to_stack  = []
-    slc_paths = []
+    vol_paths = []
     for m in MODALITIES:
         arr, paths = _get_dicoms(dimensions, m, data_dict)
-        to_stack.append(arr)
-        slc_paths.extend(paths)
+
+        if single_fold:
+            paths_to_add = []
+            for i in keep_idxs:
+                if dimensions == 2:
+                    a = arr[i * 256: i * 256 + 256]
+                elif dimensions == 3:
+                    a = np.expand_dims(arr[i], axis=0) # (384,312,256) -> (1,384,312,256)
+
+                to_stack.append(a)
+                paths_to_add.append(paths[i * 256])
+            vol_paths.extend(paths_to_add)
+        else: # load all folds
+            to_stack.append(arr)
+            vol_paths.extend(paths)
     
     X_test = np.vstack(to_stack)
 
     _test_data_shape(dimensions, X_test)
 
-    return X_test, slc_paths
+    return X_test, vol_paths
 
 
 def get_registered_test_data(dimensions, n_folds=None, keep_fold=None):
@@ -82,10 +106,9 @@ def get_registered_test_data(dimensions, n_folds=None, keep_fold=None):
     vol_paths = []
     for m in MODALITIES:
         arr, paths = _get_niftis(dimensions, m, data_dict)
-        # 2 - (13312, 384, 312)
-        # 3 - (52, 384, 312, 256)
 
         if single_fold:
+            paths_to_add = []
             for i in keep_idxs:
                 if dimensions == 2:
                     a = arr[i * 256: i * 256 + 256]
@@ -93,7 +116,8 @@ def get_registered_test_data(dimensions, n_folds=None, keep_fold=None):
                     a = np.expand_dims(arr[i], axis=0) # (384,312,256) -> (1,384,312,256)
 
                 to_stack.append(a)
-                vol_paths.append(paths[i])
+                paths_to_add.append(paths[i])
+            vol_paths.extend(paths_to_add)
         else:
             to_stack.append(arr)
             vol_paths.extend(paths)

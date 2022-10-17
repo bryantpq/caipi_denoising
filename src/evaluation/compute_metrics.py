@@ -8,33 +8,64 @@ from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import mean_squared_error as sk_mse
 from math import log10, sqrt
 
+SUBJ_RESTRICT_RANGE = {
+        '1_01_024-V1': (75, 384),
+        '1_01_029-V1': (0, 300),
+        '1_01_040-V1': (100, 384),
+        '1_07_003-V1': (50, 384),
+        '1_07_005-V1': (50, 260),
+        '1_07_009-V1': (50, 200),
+        '1_07_010-V1': (0, 200),
+        '1_07_011-V1': (50, 384),
+        '1_07_017-V1': (60, 384),
+        '1_07_022-V1': (60, 384),
+        '1_07_025-V1': (70, 384),
+        '1_07_028-V1': (70, 384),
+        '1_07_038-V1': (80, 384),
+        '1_07_039-V1': (60, 384),
+        '1_08_046-V1': (80, 384),
+        '1_08_047-V1': (0, 250)
+        }
 
-def compute_metrics(X, y, vein_mask, wm_mask, lesion_mask, brain_mask=None, precision=None):
+def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask, 
+        brain_mask=None, 
+        precision=None,
+        subj_id=None):
     '''
     Return dictionary of metrics between two images.
     '''
-    X = X.astype(np.float64)
-    y = y.astype(np.float64)
+    reference = reference.astype(np.float64)
+    before = before.astype(np.float64)
+    after = after.astype(np.float64)
 
-    metrics = {}
+    before_metrics = {}
+    after_metrics  = {}
 
-    metrics['mse']       = sk_mse(X.reshape(-1), y.reshape(-1))
-    metrics['psnr']      = psnr(X, y)
-    metrics['snr']       = snr(y)
-    if brain_mask is not None: metrics['snr_brain'] = snr(y, brain_mask)
-    metrics['ssim']      = ssim(X, y)
-    metrics['luminance'] = luminance(X, y)
-    metrics['contrast']  = contrast(X, y)
-    metrics['structure'] = structure(X, y)
-    metrics['cnr_vw']    = cnr(y, vein_mask, wm_mask)
-    metrics['cnr_lv']    = cnr(y, vein_mask, lesion_mask)
-    metrics['cnr_lw']    = cnr(y, wm_mask, lesion_mask)
+    before_metrics['axial_psnr'] = axial_psnr(before, mask=wm_mask, debug=True, subj_id=subj_id)
+    before_metrics['ssim']       = 'N/A' #ssim(reference, before)
+    before_metrics['luminance']  = 'N/A' #luminance(reference, before)
+    before_metrics['contrast']   = 'N/A' #contrast(reference, before)
+    before_metrics['structure']  = 'N/A' #structure(reference, before)
+
+    after_metrics['axial_psnr'] = axial_psnr(after, mask=wm_mask, debug=True, subj_id=subj_id)
+    after_metrics['ssim']       = ssim(before, after)
+    after_metrics['luminance']  = luminance(before, after)
+    after_metrics['contrast']   = contrast(before, after)
+    after_metrics['structure']  = structure(before, after)
 
     if precision is not None:
-        for m in metrics.keys():
-            metrics[m] = round(metrics[m], precision)
+        for m in before_metrics.keys():
+            before_metrics[m] = round(before_metrics[m], precision)
+        for m in after_metrics.keys():
+            after_metrics[m] = round(after_metrics[m], precision)
 
-    return metrics
+    return before_metrics, after_metrics
+
+    #before_metrics['mse']        = sk_mse(reference.reshape(-1), before.reshape(-1))
+    #before_metrics['snr']        = snr(before)
+    #before_metrics['cnr_vw']    = cnr(before, vein_mask, wm_mask)
+    #before_metrics['cnr_lv']    = cnr(before, vein_mask, lesion_mask)
+    #before_metrics['cnr_lw']    = cnr(before, wm_mask, lesion_mask)
 
 def snr(data, mask=None):
     '''
@@ -43,13 +74,61 @@ def snr(data, mask=None):
     '''
     if mask is not None:
         assert np.array_equal(np.unique(mask), [0, 1]) or \
-                np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
+               np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
         data = data[np.where(mask == 1)]
 
     mu = np.mean(data)
     sd = np.std(data)
 
     return mu / sd
+
+# axial_psnr needs slice_snr's before and after denoising
+def axial_psnr(y, mask=None, debug=False, subj_id=None):
+    if mask is not None:
+        cylinder_mask = _create_axial_cylinder_mask()
+        cylinder_mask[np.where(mask == 0)] = 0
+        assert np.array_equal(np.unique(mask), [0, 1]) or \
+               np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
+    
+    # TODO
+    # fill the indices we dont want with 0's
+    if subj_id in SUBJ_RESTRICT_RANGE:
+        START_I, END_I = SUBJ_RESTRICT_RANGE[subj_id]
+    else:
+        START_I, END_I = 0, y.shape[0]
+
+    pre_masked_snrs  = np.array([ -1 for i in range(0, START_I) ])
+    post_masked_snrs = np.array([ -1 for i in range(END_I, 384) ])
+    slice_snr = np.array([ snr(y[ii], cylinder_mask[ii]) for ii in range(START_I, END_I) ])
+
+    slice_snr = np.append(pre_masked_snrs, slice_snr)
+    slice_snr = np.append(slice_snr, post_masked_snrs)
+
+    slice_snr[np.isnan(slice_snr)] = 0
+    slice_snr[np.isinf(slice_snr)] = 0
+
+    max_snr_idx = np.argmax(slice_snr)
+    max_snr = slice_snr[max_snr_idx]
+
+    if debug:
+        return max_snr, slice_snr, cylinder_mask
+    else:
+        return max_snr
+
+def _create_axial_cylinder_mask(rad=0.5, size=(384, 312, 256)):
+    xx = np.linspace(-1, 1, size[2])
+    yy = np.linspace(-1, 1, size[1])
+
+    xs, ys = np.meshgrid(xx, yy)
+    zz = np.sqrt(xs**2 + ys**2)
+
+    mask2d = np.zeros(size[1:])
+    mask2d[np.where(zz < rad)] = 1
+
+    mask3d = np.zeros(size)
+    for i in range(size[0]): mask3d[i] = mask2d
+
+    return mask3d
 
 def psnr(X, y=None):
     '''
@@ -93,9 +172,9 @@ def cnr(data, mask1, mask2):
     CNR betwen the two volumes.
     '''
     assert np.array_equal(np.unique(mask1), [0, 1]) or \
-            np.array_equal(np.unique(mask1), [0]), 'Unexpected values for mask1'
+           np.array_equal(np.unique(mask1), [0]), 'Unexpected values for mask1'
     assert np.array_equal(np.unique(mask2), [0, 1]) or \
-            np.array_equal(np.unique(mask2), [0]), 'Unexpected values for mask2'
+           np.array_equal(np.unique(mask2), [0]), 'Unexpected values for mask2'
 
     masked_values1 = data[np.where(mask1 == 1)]
     masked_values2 = data[np.where(mask2 == 1)]

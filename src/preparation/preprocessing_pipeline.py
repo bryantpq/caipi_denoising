@@ -130,7 +130,7 @@ def standardize(X,
                 dimensions=3,
                 mode='subject'):
     logging.debug(X.shape)
-    assert mode == 'subject', 'oops'
+    assert mode == 'subject'
 
     if dimensions == 2:
         std_X = np.zeros(X.shape, dtype='float32')
