@@ -107,7 +107,7 @@ def get_model1(input_shape):
 
 def get_model2(input_shape):
     n_layers = 15
-    in_layer  = Input(shape=input_shape, dtype=tf.float32)
+    in_layer = Input(shape=input_shape, dtype=tf.float32)
 
     block = layers.Conv2D(64, (3, 3), padding='same', strides=1)(in_layer)
     block = layers.Activation('relu')(block)
@@ -118,9 +118,9 @@ def get_model2(input_shape):
         block = layers.Activation('relu')(block)
 
     output = layers.Conv2D(1, kernel_size=(3, 3), activation='sigmoid', padding='same')(block)
-    output = layers.Subtract()([in_layer, output])
+    #output = layers.Subtract()([in_layer, output])
     
-    return Model(inputs=[in_layer], outputs=[output])
+    return Model(inputs=[in_layer], outputs=[in_layer - output])
 
 
 def get_model3(input_shape, n_hidden_layers=15, kernel_size=3):

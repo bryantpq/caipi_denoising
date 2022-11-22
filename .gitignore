@@ -3,6 +3,7 @@
 data
 logs/
 models/
+metrics/
 !src/configs/base_config.yaml
 !src/configs/data/base_config.yaml
 src/configs/*
