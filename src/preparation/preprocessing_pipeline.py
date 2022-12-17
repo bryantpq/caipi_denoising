@@ -1,34 +1,36 @@
 import logging
 import numpy as np
 import tensorflow as tf
+import pdb
 
 
-def preprocess_slices(data,
-                      dimensions,
-                      preprocessing_params,
-                      steps):
+def preprocess_data(data, params, steps):
+    '''
+    Given numpy array of data, return list of arrays for each subject
+    '''
+    assert data.ndim == 4, 'Expected 4 dimensions. Given {}'.format(data.shape)
 
-    if dimensions == 2:
-        assert data.ndim == 3, 'Expected 3 dimensions. Given {}'.format(data.shape)
+    res = []
 
-        data = np.expand_dims(data, axis=3)
-        logging.info('Adding dimension for 2D data, {}'.format(data.shape))
+    if np.iscomplexobj(data):
+        data = data.astype('complex64')
+    else:
+        data = data.astype('float32')
 
-    elif dimensions == 3:
-        assert data.ndim == 4, 'Expected 4 dimensions. Given {}'.format(data.shape)
-
-    data = data.astype('float32')
     pipeline = gen_pipeline(steps=steps)
-    for func, name in pipeline:
-        logging.info('   step: {}'.format(name))
-        if preprocessing_params[name] is None:
-            data = func(data)
-        else:
-            preprocessing_params[name]['dimensions'] = dimensions
-            data = func(data, **preprocessing_params[name])
+    for subj_i, subject_data in enumerate(data):
+        temp_data = np.copy(subject_data)
+        pp_subj = temp_data
+        for func, name in pipeline:
+            if name == 'random_xy_flip':
+                pp_subj = func(pp_subj, subj_i, **params[name])
+            elif params[name] is None:
+                pp_subj = func(pp_subj)
+            else:
+                pp_subj = func(pp_subj, **params[name])
+        res.append(pp_subj)
 
-    return data
-
+    return res
 
 def gen_pipeline(steps):
     """
@@ -61,133 +63,109 @@ def gen_pipeline(steps):
     
     return pipeline
 
-
 """
 Preprocessing Operations
 """
 
-def normalize(X,
-              dimensions=3,
-              mode='iterate'):
+def normalize(data):
     '''
-    Change the distribution of the dataset to have mean=0, std=1
+    Change the distribution of the subject to have mean=0, std=1
     '''
-    logging.debug(X.shape)
-    if mode == 'batch':
-        mean, std = np.mean(X), np.std(X)
+    logging.debug(data.shape)
 
-        X = (X - mean) / std
+    mean, std = np.mean(data), np.std(data)
+    data = (data - mean) / std
 
+    logging.debug(data.shape)
+
+    return data
+
+def pad_square(data, pad_value=0.0):
+    logging.debug(data.shape)
+
+    pad_len = (data.shape[0] - data.shape[1]) // 2
+    data = np.pad(
+            data, 
+            [(0, 0), (pad_len, pad_len), (0, 0)],
+            constant_values=pad_value
+        )
+    
+    logging.debug(data.shape)
+
+    return data
+    
+def random_xy_flip(data, subj_i, seed=24, mode='slice'):
+    logging.debug(data.shape)
+
+    if mode == 'subject':
+        data = tf.image.stateless_random_flip_up_down(data, seed=[subj_i, seed])
+        data = tf.image.stateless_random_flip_left_right(data, seed=[subj_i, subj_i * seed])
     else:
-        for i in range(len(X)):
-            mean, std = np.mean(X[i]), np.std(X[i])
+        for slc_i in range(data.shape[-1]):
+            slc = data[:,:,slc_i]
+            slc = np.expand_dims(slc, axis=2)
+            slc = tf.image.stateless_random_flip_up_down(slc, seed=[subj_i, slc_i * seed])
+            slc = tf.image.stateless_random_flip_left_right(slc, seed=[subj_i, subj_i * slc_i * seed])
+            slc = np.squeeze(slc)
+            data[:,:,slc_i] = slc
 
-            X[i] = (X[i] - mean) / std
+    data = np.array(data)
 
-    logging.debug(X.shape)
-    return X
+    logging.debug(data.shape)
 
+    return data
 
-def pad_square(X, 
-               dimensions=3,
-               pad_value=0.0):
-    logging.debug(X.shape)
-    if dimensions == 2:
-        pad_len = (X.shape[1] - X.shape[2]) // 2
-        X = np.pad(
-                X, 
-                [(0, 0), (0, 0), (pad_len, pad_len), (0, 0)],
-                constant_values=pad_value
-            )
-    elif dimensions == 3:
-        pad_len = [(0, 0)]
-        largest_dim = np.max(X.shape[1:])
-        for dim in X.shape[1:]:
-            diff = largest_dim - dim
-            pad_len.append( (diff // 2, diff // 2) )
-        X = np.pad(X, pad_len, constant_values=pad_value)
-    
-    logging.debug(X.shape)
+def standardize(data):
+    logging.debug(data.shape)
 
-    return X
-    
+    min_, max_ = np.min(data), np.max(data)
+    num  = data - min_
+    den  = max_ - min_
+    data = num / den
 
-def random_xy_flip(X,
-                   dimensions=3,
-                   seed=24):
-    logging.debug(X.shape)
-    for img_i in range(X.shape[0]):
-        img = X[img_i]
-        img = tf.image.stateless_random_flip_up_down(img, seed=[img_i, seed])
-        img = tf.image.stateless_random_flip_left_right(img, seed=[img_i, seed * seed])
-        X[img_i] = img
+    logging.debug(data.shape)
 
-    logging.debug(X.shape)
-    return X
+    return data
 
+def threshold_intensities(data, value=5000):
+    logging.debug(data.shape)
+    orig_len = data.shape[-1]
+    logging.debug(f'    Before: {orig_len}')
 
-def standardize(X,
-                dimensions=3,
-                mode='subject'):
-    logging.debug(X.shape)
-    assert mode == 'subject'
+    if np.iscomplexobj(data):
+        mag_data = np.abs(data)
+        sum_intensities = np.array(
+                [ np.sum(mag_data[:,:,i]) for i in range(mag_data.shape[-1]) ])
+        data = data[:,:,np.where(sum_intensities > value)]
+    else:
+        sum_intensities = np.array([ np.sum(data[:,:,i]) for i in range(data.shape[-1]) ])
+        data = data[:,:,np.where(sum_intensities > value)]
 
-    if dimensions == 2:
-        std_X = np.zeros(X.shape, dtype='float32')
+    new_len = data.shape[-1]
+    logging.debug(f'    After: {new_len}')
 
-        for subj_i in range(int(len(X) / 256)):
-            subj_vol = X[subj_i * 256: subj_i * 256 + 256]
-            min_val, max_val = np.min(subj_vol), np.max(subj_vol)
-            num = subj_vol - min_val
-            den = max_val - min_val
-            std_X[subj_i * 256: subj_i * 256 + 256] = num / den
+    data = np.squeeze(data)
 
-    elif dimensions == 3:
-        std_X = np.zeros(X.shape, dtype='float32')
+    return data
 
-        for subj_i in range(len(X)):
-            min_val, max_val = np.min(X[subj_i]), np.max(X[subj_i])
-            num = X[subj_i] - min_val
-            den = max_val - min_val
-            std_X[subj_i] = num / den
+def white_noise(data_stack, mu=0.0, sigma=0.2):
+    logging.debug(data_stack.shape)
 
-    logging.debug(X.shape)
-    return std_X
-
-
-def threshold_intensities(X, 
-                          dimensions=3,
-                          value=5000):
-
-    assert dimensions == 2, f'threshold_intensities not implemented for {dimensions} dimensions.'
-
-    logging.debug(X.shape)
-    orig_len = len(X)
-    logging.info(f'    Before: {orig_len}')
-    sum_intensities = np.array([ np.sum(X[i]) for i in range(len(X)) ])
-    X = X[np.where(sum_intensities > value)]
-    new_len = len(X)
-    logging.info(f'    After: {new_len}')
-    logging.debug(X.shape)
-
-    return X
-
-
-def white_noise(X, 
-                dimensions=3,
-                mu=0.0, 
-                sigma=0.2):
-    logging.debug(X.shape)
-    for i in range(len(X)):
-        max_val = np.max(X[i])
-
+    for subj_i in range(len(data_stack)):
+        data = data_stack[subj_i]
         if type(sigma) == list:
-            cur_sigma = np.random.choice(sigma)
-            noise_map = np.random.normal(mu, cur_sigma * max_val, X[i].shape)
+            sigma = np.random.choice(sigma)
+
+        if np.iscomplexobj(data):
+            max_real, max_imag = np.max(np.real(data)), np.max(np.imag(data))
+            real_noise_map = np.random.normal(mu, sigma * max_real, data.shape)
+            imag_noise_map = 1j * np.random.normal(mu, sigma * max_imag, data.shape)
+            data_stack[subj_i] = data + real_noise_map + imag_noise_map
         else:
-            noise_map = np.random.normal(mu, sigma * max_val, X[i].shape)
+            max_ = np.max(data)
+            noise_map = np.random.normal(mu, sigma * max_, data.shape)
+            data_stack[subj_i] = data + noise_map
 
-        X[i] = X[i] + noise_map
+    logging.debug(data_stack.shape)
 
-    logging.debug(X.shape)
-    return X
+    return data_stack

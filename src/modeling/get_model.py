@@ -2,38 +2,36 @@ import logging
 import os
 import tensorflow as tf
 
-from tensorflow.keras import layers, losses, Sequential, Input
+from tensorflow.keras import losses
 from tensorflow.keras.models import Model
-from modeling.models import Denoiser, get_model1, get_model2, get_model3
+from modeling.models import dncnn, res_dncnn, complex_dncnn
+from modeling.losses import get_loss
 
 
-def get_model(model_type, 
-              input_shape=None, 
-              load_model_path=None,
-              learning_rate=0.001):
+def get_model(
+        model_type, 
+        loss_function,
+        input_shape=None, 
+        load_model_path=None,
+        learning_rate=0.001
+    ):
     assert len(input_shape) == 4, "Expected input_shape to be 4-dim. Got {}".format(input_shape)
     
     img_size = input_shape[1:]
     
-    if model_type == 0:
-        logging.info('    Using model type 0')
-        model = Denoiser(input_shape=img_size).model
-        
-    elif model_type == 1:
-        logging.info('    Using model type 1')
-        model = get_model1(input_shape=img_size)
+    logging.info(f'    Using {model_type}')
+    if model_type == 'dncnn':
+        model = dncnn(input_shape=img_size)
 
-    elif model_type == 2:
-        logging.info('    Using model type 2')
-        model = get_model2(input_shape=img_size)
+    elif model_type == 'res_dncnn':
+        model = res_dncnn(input_shape=img_size)
 
-    elif model_type == 3:
-        logging.info('    Using model type 3')
-        model = get_model3(input_shape=img_size)
+    elif model_type == 'complex_dncnn':
+        model = complex_dncnn(input_shape=img_size)
 
     model.build(input_shape=input_shape)
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                  loss=losses.MeanSquaredError(), 
+                  loss=get_loss(loss_function), 
                   metrics=[])
     
     if load_model_path is not None and load_model_path != '' :

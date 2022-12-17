@@ -1,22 +1,24 @@
 config_name: 'base_config'
 data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
-
-dimensions: 2
+save_dtype: 'float16'
 
 generate_dataset:
-    train_or_test_set: 'train'
-    n_folds: 10
-    extract_patches: True
+    raw_data_modalities: 'magnitude'
+    dataset_type: 'test'
+    n_folds: Null
+    extract_patches: False
 
-    X_steps:
-        - standardize
+    image_steps:
+        - threshold_intensities
         - pad_square
         - random_xy_flip
         - white_noise
-    y_steps:
-        - standardize
+    label_steps:
+        - threshold_intensities
         - pad_square
         - random_xy_flip
+    input_steps:
+        - pad_square
     extract_patches_params:
         extract_step: [64, 64]
         patch_size: [256, 256]
@@ -24,24 +26,17 @@ generate_dataset:
         pad_value: 0.0
     preprocessing_params:
         normalize:
-            mode: 'batch'
         pad_square:
             pad_value: 0.0
         random_xy_flip:
             seed: 24
-        standardize:
             mode: 'subject'
+        standardize:
         threshold_intensities:
             value: 5000
         white_noise:
             mu: 0.0
-            sigma: 0.07
+            sigma: [0.04, 0.05, 0.06]
 
-save_dtype: 'float16'
 logging_level: 'info'
 workers: 3
-gpus:
-- /GPU:0
-- /GPU:1
-- /GPU:2
-- /GPU:3

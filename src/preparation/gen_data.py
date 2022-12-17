@@ -12,131 +12,116 @@ import pydicom as dicom
 DATA_FILE = '/home/quahb/caipi_denoising/data/data_v2.json'
 N_SUBJECTS = 52
 
-def get_train_data(dimensions, train_loo=False):
+
+def get_data_dict(json_file_path=DATA_FILE):
     """
-    Return np.array of all slices to be used for training and validation.
+    Create dict for 
+        {subj_id:
+            {modality: 
+                [dicom_paths]
+            }
+        }
     """
-    MODALITY = '3D_T2STAR_segEPI'
-    data_dict = get_data_dict()
+    data_dict = {}
+    DICOMS_PATH = '/home/quahb/caipi_denoising/data/dicoms/{}/{}/'
+    NIFTI_PATH  = '/home/quahb/caipi_denoising/data/niftis/{}/{}.nii.gz'
     
-    X_train, slc_paths = _get_dicoms(dimensions, MODALITY, data_dict)
+    with open(json_file_path) as json_file:
+        data_json = json.load(json_file)
 
-    _test_data_shape(dimensions, X_train)
+        for subj in data_json['subjects']:
+            data_dict[subj] = {}
 
-    y_train = np.copy(X_train)
-    
-    if train_loo is not False:
-        if dimensions == 2:
-            train, test = train_leave_one_out_2D(X_train, y_train, slc_paths)
-        elif dimensions == 3:
-            train, test = train_leave_one_out_3D(X_train, y_train, slc_paths)
+            for modal in data_json['dicom_modalities']:
+                path = DICOMS_PATH.format(subj, modal)
+                subj_dicoms = os.listdir(path)
+                for i in range(len(subj_dicoms)): subj_dicoms[i] = path + subj_dicoms[i]
+                data_dict[subj][modal] = subj_dicoms
 
-        if train_loo == 'train':
-            return train
-        elif train_loo == 'test':
-            return test
+            for modal in data_json['nifti_modalities']:
+                path = NIFTI_PATH.format(subj, modal)
+                data_dict[subj][modal] = path
 
-    return X_train, y_train, slc_paths
+            for modal in data_json['mask_modalities']:
+                path = NIFTI_PATH.format(subj, modal)
+                data_dict[subj][modal] = path
+
+    return data_dict
 
 
-def get_test_data(dimensions, n_folds=None, keep_fold=None):
+def get_dicoms(dimensions, modality, data_dict):
     """
-    Return np.array of all slices to be used for testing.
+    Return np.array of all dicom slices for a single modality. 
+    Dicom slices are sorted subject-wise.
     """
-    global N_SUBJECTS
+    all_images = []
+    all_paths  = []
+    for subj in tqdm(data_dict.keys(), ncols=80, desc=modality):
+        subj_slices_path = data_dict[subj][modality]
+        subj_slices = []
+        for slc_path in subj_slices_path:
+            ds = dicom.dcmread(slc_path)
+            subj_slices.append(ds)
 
-    MODALITIES = ['CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
-    data_dict = get_data_dict()
-    
-    single_fold = n_folds is not None and keep_fold is not None
-    if single_fold:
-        logging.info(f'Only keeping subjects from fold {keep_fold}')
-        kf = KFold(n_folds, shuffle=True, random_state=42)
-        for fold_i, idxs in enumerate(kf.split(range(N_SUBJECTS))):
-            if fold_i == keep_fold:
-                train_i, test_i = idxs
-                keep_idxs = test_i
+        subj_slices = [ slices for slices, _ in sorted( 
+            zip(subj_slices, subj_slices_path), 
+            key=lambda pair: pair[0].SliceLocation ) 
+        ]
+        subj_slices_path = [ paths for _, paths in sorted( 
+            zip(subj_slices, subj_slices_path), 
+            key=lambda pair: pair[0].SliceLocation ) 
+        ]
 
-    to_stack  = []
-    vol_paths = []
-    for m in MODALITIES:
-        arr, paths = _get_dicoms(dimensions, m, data_dict)
-
-        if single_fold:
-            paths_to_add = []
-            for i in keep_idxs:
-                if dimensions == 2:
-                    a = arr[i * 256: i * 256 + 256]
-                elif dimensions == 3:
-                    a = np.expand_dims(arr[i], axis=0) # (384,312,256) -> (1,384,312,256)
-
-                to_stack.append(a)
-                paths_to_add.append(paths[i * 256])
-            vol_paths.extend(paths_to_add)
-        else: # load all folds
-            to_stack.append(arr)
-            vol_paths.extend(paths)
-    
-    X_test = np.vstack(to_stack)
-
-    _test_data_shape(dimensions, X_test)
-
-    return X_test, vol_paths
-
-
-def get_registered_test_data(dimensions, n_folds=None, keep_fold=None):
-    """
-    Return np.array of the nifti dataset
-    """
-    global N_SUBJECTS
-
-    MODALITIES = ['3D_EPI_1x2_Reg', '3D_EPI_1x3_Reg', '3D_EPI_2x2_Reg']
-    data_dict = get_data_dict()
-
-    single_fold = n_folds is not None and keep_fold is not None
-    if single_fold:
-        logging.info(f'Only keeping subjects from fold {keep_fold}')
-        kf = KFold(n_folds, shuffle=True, random_state=42)
-        for fold_i, idxs in enumerate(kf.split(range(N_SUBJECTS))):
-            if fold_i == keep_fold:
-                train_i, test_i = idxs
-                keep_idxs = test_i
-
-    to_stack = []
-    vol_paths = []
-    for m in MODALITIES:
-        arr, paths = _get_niftis(dimensions, m, data_dict)
-
-        if single_fold:
-            paths_to_add = []
-            for i in keep_idxs:
-                if dimensions == 2:
-                    a = arr[i * 256: i * 256 + 256]
-                elif dimensions == 3:
-                    a = np.expand_dims(arr[i], axis=0) # (384,312,256) -> (1,384,312,256)
-
-                to_stack.append(a)
-                paths_to_add.append(paths[i])
-            vol_paths.extend(paths_to_add)
+        if 'pha' in modality:
+            subj_slices = [s.pixel_array * s.RescaleSlope + s.RescaleIntercept for s in subj_slices]
         else:
-            to_stack.append(arr)
-            vol_paths.extend(paths)
+            subj_slices = [s.pixel_array for s in subj_slices]
 
-    X_test = np.vstack(to_stack)
+        if dimensions == 2:
+            all_images.extend([s for s in subj_slices])
+            all_paths.extend(subj_slices_path)
+        elif dimensions == 3:
+            all_images.append([s for s in subj_slices])
+            all_paths.append(subj_slices_path)
+    
+    all_images = np.stack(all_images, axis=0)
 
-    _test_data_shape(dimensions, X_test)
+    if dimensions == 3:
+        all_images = np.moveaxis(all_images, 1, -1)
 
-    return X_test, vol_paths
+    return all_images, all_paths
 
 
-def _test_data_shape(dimensions, data):
-    error_msg = 'Expected shape: {}, Given shape: {}'
-    if dimensions == 2:
-        expected_shape = (384, 312)
-        assert data.shape[1:] == expected_shape, error_msg.format(expected_shape, data.shape[1:])
-    elif dimensions == 3:
-        expected_shape = (384, 312, 256)
-        assert data.shape[1:] == expected_shape, error_msg.format(expected_shape, data.shape[1:])
+def get_raw_data(dataset_type, modalities):
+    RAW_DATA_PATH = '/home/quahb/caipi_denoising/data/raw_data/'
+    TRAIN_NAME = '3D_T2STAR_segEPI'
+    TEST_NAME  = 'CAIPI'
+
+    res_data = []
+    res_names = []
+
+    if type(modalities) is not list:
+        modalities = [modalities]
+
+    for m in modalities:
+        folder_path = os.path.join(RAW_DATA_PATH, m)
+        file_names  = sorted(os.listdir(folder_path))
+
+        if dataset_type == 'train':
+            file_names = [ f for f in file_names if TRAIN_NAME in f ]
+        elif dataset_type == 'test':
+            file_names = [ f for f in file_names if TEST_NAME in f ]
+
+        base_names = [ f.split('.')[0] for f in file_names ]
+        res_names.extend(base_names)
+
+        file_names = [ os.path.join(folder_path, f) for f in file_names ]
+        for f in file_names:
+            res_data.append(np.load(f))
+
+    res_data = np.stack(res_data)
+
+    return res_data, res_names
     
 
 def get_masks():
@@ -167,6 +152,7 @@ def get_masks():
 
     return result
 
+
 def _threshold_mask(mask, mask_type):
     wm_threshold = 0.0
     vein_threshold = 0.0
@@ -183,159 +169,6 @@ def _threshold_mask(mask, mask_type):
 
     return mask
 
-def get_fold_test_set(X_slices, y_slices, slc_paths, train_idx, test_idx):
-    train_X = []
-    train_y = []
-    train_paths = []
-    for i in train_idx:
-        train_X.append(X_slices[i * 256: i * 256 + 256])
-        train_y.append(y_slices[i * 256: i * 256 + 256])
-        train_paths.extend(slc_paths[i * 256: i * 256 + 256])
-
-    test_X = []
-    test_y = []
-    test_paths = []
-    for j in test_idx:
-        test_X.append(X_slices[j * 256: j * 256 + 256])
-        test_y.append(y_slices[j * 256: j * 256 + 256])
-        test_paths.extend(slc_paths[j * 256: j * 256 + 256])
-
-    train_X = np.vstack(train_X)
-    train_y = np.vstack(train_y)
-    test_X = np.vstack(test_X)
-    test_y = np.vstack(test_y)
-
-    return test_X, test_y, test_paths
-
-def train_leave_one_out_2D(X, y, paths, seed=24):
-    """
-    Split given lists by number of subjects into 80:20 ratio
-    """
-    global N_SUBJECTS
-    split_i = int(N_SUBJECTS * 0.8)
-    shuffle_i = np.random.RandomState(seed=seed).permutation(int(len(X) / 256))
-    train_subj_i, test_subj_i = shuffle_i[:split_i], shuffle_i[split_i:]
-
-    train_i = []
-    for subj_i in train_subj_i:
-        train_i.extend(list(range(subj_i*256, subj_i*256 + 256)))
-
-    test_i = []
-    for subj_i in test_subj_i:
-        test_i.extend(list(range(subj_i*256, subj_i*256 + 256)))
-
-    train_paths = [paths[i] for i in train_i]
-    test_paths  = [paths[i] for i in test_i]
-
-    id_pos = 6
-    train_subj = []
-    for i in range(0, len(train_i), 256):
-        subj_id = train_paths[i].split('/')[id_pos]
-        train_subj.append(subj_id)
-
-    test_subj = []
-    for i in range(0, len(test_i), 256):
-        subj_id = test_paths[i].split('/')[id_pos]
-        test_subj.append(subj_id)
-
-    logging.info(f'Training indices: {train_subj_i}')
-    logging.info(f'Training subjects: {train_subj}')
-    logging.info('')
-    logging.info(f'Testing indices: {test_subj_i}')
-    logging.info(f'Testing subjects: {test_subj}')
-
-    train = [X[train_i], y[train_i], train_paths]
-    test  = [ X[test_i],  y[test_i],  test_paths]
-
-    return train, test
-
-def train_leave_one_out_3D(X, y, paths, seed=24):
-    global N_SUBJECTS
-    split_i = int(N_SUBJECTS * 0.8)
-    shuffle_i = np.random.RandomState(seed=seed).permutation(len(X))
-    train_subj_i, test_subj_i = shuffle_i[:split_i], shuffle_i[split_i:]
-
-    train_paths = [paths[idx] for idx in train_subj_i]
-    test_paths  = [paths[idx] for idx in test_subj_i]
-
-    train = X[train_subj_i], y[train_subj_i], train_paths
-    test = X[test_subj_i], y[test_subj_i], test_paths
-
-    return train, test
-
-def get_data_dict(json_file_path=DATA_FILE):
-    """
-    Create dict for 
-        {subj_id:
-            {modality: 
-                [dicom_paths]
-            }
-        }
-    """
-    data_dict = {}
-    DICOMS_PATH = '/home/quahb/caipi_denoising/data/source_dicoms/{}/{}/'
-    NIFTI_PATH  = '/home/quahb/caipi_denoising/data/source_niftis/{}/{}.nii.gz'
-    
-    with open(json_file_path) as json_file:
-        data_json = json.load(json_file)
-
-        for subj in data_json['subjects']:
-            data_dict[subj] = {}
-
-            for modal in data_json['dicom_modalities']:
-                path = DICOMS_PATH.format(subj, modal)
-                subj_dicoms = os.listdir(path)
-                for i in range(len(subj_dicoms)): subj_dicoms[i] = path + subj_dicoms[i]
-                data_dict[subj][modal] = subj_dicoms
-
-            for modal in data_json['nifti_modalities']:
-                path = NIFTI_PATH.format(subj, modal)
-                data_dict[subj][modal] = path
-
-            for modal in data_json['mask_modalities']:
-                path = NIFTI_PATH.format(subj, modal)
-                data_dict[subj][modal] = path
-
-    return data_dict
-
-def _get_dicoms(dimensions, modality, data_dict):
-    """
-    Return np.array of all dicom slices for a single modality. 
-    Dicom slices are sorted subject-wise.
-    """
-    all_images = []
-    all_paths  = []
-    for subj in tqdm(data_dict.keys(), ncols=80, desc=modality):
-        subj_slices_path = data_dict[subj][modality]
-        subj_slices = []
-        for slc_path in subj_slices_path:
-            ds = dicom.dcmread(slc_path)
-            subj_slices.append(ds)
-
-        subj_slices = [ slices for slices, _ in sorted( 
-            zip(subj_slices, subj_slices_path), 
-            key=lambda pair: pair[0].SliceLocation ) 
-        ]
-        subj_slices_path = [ paths for _, paths in sorted( 
-            zip(subj_slices, subj_slices_path), 
-            key=lambda pair: pair[0].SliceLocation ) 
-        ]
-
-        subj_slices = [s.pixel_array for s in subj_slices]
-
-        if dimensions == 2:
-            all_images.extend([s for s in subj_slices])
-            all_paths.extend(subj_slices_path)
-        elif dimensions == 3:
-            all_images.append([s for s in subj_slices])
-            all_paths.append(subj_slices_path)
-    
-    all_images = np.stack(all_images, axis=0)
-
-    if dimensions == 3:
-        all_images = np.moveaxis(all_images, 1, -1)
-
-    return all_images, all_paths
 
 def _get_niftis(dimensions, modality, data_dict):
     all_vols = []

@@ -1,12 +1,14 @@
 config_name: 'base_config'
-data_folder: '/home/quahb/caipi_denoising/data/datasets/base_config'
-results_folder: '/home/quahb/caipi_denoising/data/results/base_config'
+data_folder: '/home/quahb/caipi_denoising/data/datasets/train/compleximage_full'
+results_folder: '/home/quahb/caipi_denoising/data/datasets/test/compleximage_full_cdncnn'
+save_dtype: 'complex64'
 
-dimensions: 2
-model_type: 3
-input_shape: [null, 256, 256, 1]
-n_folds: null
-test_fold: null
+model_type: 'complex_dncnn'
+input_shape: [null, 384, 384, 1]
+n_folds: False
+test_fold: False
+complex_split: False
+loss_function: 'mae'
 
 train_network:
     load_model_path: null 
@@ -18,37 +20,10 @@ train_network:
     batch_size: 32
 
 predict_test:
-    train_or_test_set: 'train'
-    train_leave_one_out: True
-    test_n_subjects: null
     load_model_path: ''
-    recon_patches: True
-    extract_patches: True
+    extract_patches: False
     extract_step: [64, 64]
-    seed: 24
-    save_mode: 'subject'
-    X_steps:
-        - standardize
-        - pad_square
-    gt_steps:
-        - standardize
-        - pad_square
-    preprocessing_params:
-        pad_square:
-            pad_value: 0.0
-        random_xy_flip:
-            seed: 24
-        white_noise:
-            mu: 0.0
-            sigma: 0.10
-        threshold_intensities:
-            value: 5000
-        standardize:
-            mode: 'subject'
-        normalize:
-            mode: 'batch'
 
-save_dtype: 'float16'
 logging_level: 'info'
 workers: 5
 gpus:
