@@ -14,7 +14,7 @@ def main():
 
     if args.path != False:
         if not os.path.isdir(args.path):
-            print('Given path is not valid: ' + args.path)
+            print('Given path is not a dir: ' + args.path)
             print('Exiting...')
             return
 
@@ -28,7 +28,8 @@ def main():
     if not os.path.exists(RESULT_DIR):
         os.makedirs(RESULT_DIR)
 
-    for f in files:
+    for i, f in enumerate(files):
+        print(f'{i+1}/{len(files)}')
         print('Loading file: {}'.format(f))
         a = np.load(f)
         fname = f.split('/')[-1]

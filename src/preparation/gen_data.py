@@ -9,11 +9,8 @@ from sklearn.model_selection import KFold
 import numpy as np
 import pydicom as dicom
 
-DATA_FILE = '/home/quahb/caipi_denoising/data/data_v2.json'
-N_SUBJECTS = 52
 
-
-def get_data_dict(json_file_path=DATA_FILE):
+def get_data_dict(json_type='cavsms'):
     """
     Create dict for 
         {subj_id:
@@ -24,27 +21,42 @@ def get_data_dict(json_file_path=DATA_FILE):
     """
     data_dict = {}
     DICOMS_PATH = '/home/quahb/caipi_denoising/data/dicoms/{}/{}/'
-    NIFTI_PATH  = '/home/quahb/caipi_denoising/data/niftis/{}/{}.nii.gz'
-    
+    MSREBS_PATH  = '/home/quahb/caipi_denoising/data/msrebs/{}/{}.nii.gz'
+    CAVSMS_FILE = '/home/quahb/caipi_denoising/data/cavsms_v2.json'
+    MSREBS_FILE = '/home/quahb/caipi_denoising/data/msrebs_v1.json'
+
+    if json_type.lower() == 'cavsms':
+        json_file_path = CAVSMS_FILE
+    elif json_type.lower() == 'msrebs':
+        json_file_path = MSREBS_FILE
+    else:
+        raise NotImplementedError(f'Given json type not understood: {json_type}')
+
     with open(json_file_path) as json_file:
         data_json = json.load(json_file)
 
         for subj in data_json['subjects']:
             data_dict[subj] = {}
 
-            for modal in data_json['dicom_modalities']:
-                path = DICOMS_PATH.format(subj, modal)
-                subj_dicoms = os.listdir(path)
-                for i in range(len(subj_dicoms)): subj_dicoms[i] = path + subj_dicoms[i]
-                data_dict[subj][modal] = subj_dicoms
+            if json_type.lower() == 'cavsms':
+                for modal in data_json['dicom_modalities']:
+                    path = DICOMS_PATH.format(subj, modal)
+                    subj_dicoms = os.listdir(path)
+                    for i in range(len(subj_dicoms)): subj_dicoms[i] = path + subj_dicoms[i]
+                    data_dict[subj][modal] = subj_dicoms
 
-            for modal in data_json['nifti_modalities']:
-                path = NIFTI_PATH.format(subj, modal)
-                data_dict[subj][modal] = path
+                #for modal in data_json['nifti_modalities']:
+                #    path = NIFTI_PATH.format(subj, modal)
+                #    data_dict[subj][modal] = path
 
-            for modal in data_json['mask_modalities']:
-                path = NIFTI_PATH.format(subj, modal)
-                data_dict[subj][modal] = path
+                #for modal in data_json['mask_modalities']:
+                #    path = NIFTI_PATH.format(subj, modal)
+                #    data_dict[subj][modal] = path
+
+            elif json_type.lower() == 'msrebs':
+                for modal in data_json['msrebs_modalities']:
+                    path = MSREBS_PATH.format(subj, modal)
+                    data_dict[subj][modal] = path
 
     return data_dict
 
@@ -92,8 +104,30 @@ def get_dicoms(dimensions, modality, data_dict):
     return all_images, all_paths
 
 
-def get_raw_data(dataset_type, modalities):
-    RAW_DATA_PATH = '/home/quahb/caipi_denoising/data/raw_data/'
+def get_niftis(dimensions, modality, data_dict):
+    all_vols = []
+    all_paths  = []
+    
+    for subj in tqdm(data_dict.keys(), ncols=80, desc=modality):
+        vol_path = data_dict[subj][modality]
+        vol_data = nib.load(vol_path).get_fdata()
+        vol_data = np.swapaxes(vol_data, 0, 1)
+        vol_data = np.flip(vol_data, 0) # flip the 384 dim
+
+        all_vols.append(vol_data)
+        all_paths.append(vol_path)
+
+    if dimensions == 2:
+        all_vols = [ np.moveaxis(vol, -1, 0) for vol in all_vols ]
+        all_vols = np.vstack(all_vols)
+    elif dimensions == 3:
+        all_vols = np.stack(all_vols)
+
+    return all_vols, all_paths
+
+
+def get_raw_data(dataset_type, modalities, dataset_name):
+    RAW_DATA_PATH = '/home/quahb/caipi_denoising/data/raw_data/{}'.format(dataset_name)
     TRAIN_NAME = '3D_T2STAR_segEPI'
     TEST_NAME  = 'CAIPI'
 
@@ -139,7 +173,7 @@ def get_masks():
 
     result = {}
     for m in MODALITIES:
-        arr, paths = _get_niftis(3, m, data_dict)
+        arr, paths = get_niftis(3, m, data_dict)
 
         for mask, path in zip(arr, paths):
             subj_id = path.split('/')[6]
@@ -168,25 +202,3 @@ def _threshold_mask(mask, mask_type):
         logging.info('Unknown mask type: {}'.format(mask_type))
 
     return mask
-
-
-def _get_niftis(dimensions, modality, data_dict):
-    all_vols = []
-    all_paths  = []
-    
-    for subj in tqdm(data_dict.keys(), ncols=80, desc=modality):
-        vol_path = data_dict[subj][modality]
-        vol_data = nib.load(vol_path).get_fdata()
-        vol_data = np.moveaxis(vol_data, 0, 1) # (312, 384, 256) -> (384, 312, 256)
-        vol_data = np.flip(vol_data, axis=2)
-
-        all_vols.append(vol_data)
-        all_paths.append(vol_path)
-
-    if dimensions == 2:
-        all_vols = [ np.moveaxis(vol, -1, 0) for vol in all_vols ]
-        all_vols = np.vstack(all_vols)
-    elif dimensions == 3:
-        all_vols = np.stack(all_vols)
-
-    return all_vols, all_paths

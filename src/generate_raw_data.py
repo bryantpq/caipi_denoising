@@ -9,7 +9,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 import yaml
 
-from preparation.gen_data import N_SUBJECTS, get_dicoms, get_data_dict
+from preparation.gen_data import get_dicoms, get_niftis, get_data_dict
 from utils.create_logger import create_logger
 
 
@@ -18,29 +18,51 @@ def main():
     args = parser.parse_args()
     create_logger('generate_raw_data', 'info')
     
-    # load dicoms to be processed
-    data_dict = get_data_dict()
-    MAG_MODALITIES = ['3D_T2STAR_segEPI', 'CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
-    PHA_MODALITIES = ['3D_T2STAR_segEPI_pha', 'CAIPI1x2_pha', 'CAIPI1x3_pha', 'CAIPI2x2_pha']
+    data_dict = get_data_dict(args.dataset_type)
 
     mag_data_stack, pha_data_stack = [], []
     mag_names_stack, pha_names_stack = [], []
+    if args.dataset_type == 'cavsms':
+        logging.info('Loading CAVS MS dicom images...')
+        MAG_MODALITIES = ['3D_T2STAR_segEPI', 'CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
+        PHA_MODALITIES = ['3D_T2STAR_segEPI_pha', 'CAIPI1x2_pha', 'CAIPI1x3_pha', 'CAIPI2x2_pha']
 
-    logging.info('Loading dicom images...')
-    for m, p in zip(MAG_MODALITIES, PHA_MODALITIES):
-        # data.shape = [n_subj, 384, 312, 256]
-        # paths = [ [subj1], [subj2], ...]
-        mag_data, mag_paths = get_dicoms(3, m, data_dict)
-        pha_data, pha_paths = get_dicoms(3, p, data_dict)
+        for m, p in zip(MAG_MODALITIES, PHA_MODALITIES):
+            # data.shape = [n_subj, 384, 312, 256]
+            # paths = [ [subj1], [subj2], ...]
+            mag_data, mag_paths = get_dicoms(3, m, data_dict)
+            pha_data, pha_paths = get_dicoms(3, p, data_dict)
 
-        subj_ids = [ path[0].split('/')[6] for path in mag_paths ]
-        mag_names = [ subj_id + '_' + m for subj_id in subj_ids ]
-        pha_names = [ subj_id + '_' + p for subj_id in subj_ids ]
+            subj_ids = [ path[0].split('/')[6] for path in mag_paths ]
+            mag_names = [ subj_id + '_' + m for subj_id in subj_ids ]
+            pha_names = [ subj_id + '_' + p for subj_id in subj_ids ]
 
-        mag_data_stack.append(mag_data)
-        pha_data_stack.append(pha_data)
-        mag_names_stack.extend(mag_names)
-        pha_names_stack.extend(pha_names)
+            mag_data_stack.append(mag_data)
+            pha_data_stack.append(pha_data)
+            mag_names_stack.extend(mag_names)
+            pha_names_stack.extend(pha_names)
+
+    elif args.dataset_type == 'msrebs':
+        logging.info('Loading MS REBS dicom images...')
+        #MAG_MODALITIES = ['3D_T2STAR_segEPI', 'CAIPI1x2', 'CAIPI1x3', 'CAIPI2x2']
+        #PHA_MODALITIES = ['3D_T2STAR_segEPI_pha', 'CAIPI1x2_pha', 'CAIPI1x3_pha', 'CAIPI2x2_pha']
+        MAG_MODALITIES = ['CAIPI1x3']
+        PHA_MODALITIES = ['CAIPI1x3_pha']
+
+        for m, p in zip(MAG_MODALITIES, PHA_MODALITIES):
+            # data.shape = [n_subj, 384, 312, 256]
+            # paths = [ [subj1], [subj2], ...]
+            mag_data, mag_paths = get_niftis(3, m, data_dict)
+            pha_data, pha_paths = get_niftis(3, p, data_dict)
+
+            subj_ids = [ path.split('/')[6] for path in mag_paths ]
+            mag_names = [ subj_id + '_' + m for subj_id in subj_ids ]
+            pha_names = [ subj_id + '_' + p for subj_id in subj_ids ]
+
+            mag_data_stack.append(mag_data)
+            pha_data_stack.append(pha_data)
+            mag_names_stack.extend(mag_names)
+            pha_names_stack.extend(pha_names)
 
     mag_data, pha_data = np.vstack(mag_data_stack), np.vstack(pha_data_stack)
     mag_names, pha_names = mag_names_stack, pha_names_stack
@@ -69,10 +91,10 @@ def main():
             pha_data[subj_i] = temp
     
     # generate raw data
-    MAG_PATH = '/home/quahb/caipi_denoising/data/raw_data/magnitude/'
-    PHA_PATH = '/home/quahb/caipi_denoising/data/raw_data/phase/'
-    COMPLEX_IMAG_PATH = '/home/quahb/caipi_denoising/data/raw_data/complex_image/'
-    COMPLEX_FREQ_PATH = '/home/quahb/caipi_denoising/data/raw_data/complex_frequency/'
+    MAG_PATH = f'/home/quahb/caipi_denoising/data/raw_data/{args.dataset_type}/magnitude/'
+    PHA_PATH = f'/home/quahb/caipi_denoising/data/raw_data/{args.dataset_type}/phase/'
+    COMPLEX_IMAG_PATH = f'/home/quahb/caipi_denoising/data/raw_data/{args.dataset_type}/complex_image/'
+    COMPLEX_FREQ_PATH = f'/home/quahb/caipi_denoising/data/raw_data/{args.dataset_type}/complex_frequency/'
 
     logging.info('Saving magnitude images...')
     mag_data = mag_data.astype('float32')
@@ -98,10 +120,11 @@ def main():
         complex_freq = complex_freq.astype('complex64')
         np.save(os.path.join(COMPLEX_FREQ_PATH, name + '_ComplexFreq'), complex_freq)
 
-    logging.info('Completed generating raw data')
+    logging.info(f'Completed generating raw data for {args.dataset_type}')
 
 def create_parser():
     parser = argparse.ArgumentParser()
+    parser.add_argument('dataset_type', choices=['cavsms', 'msrebs'])
     parser.add_argument('--rescale_magnitude', action='store_true', default=True)
     parser.add_argument('--rescale_phase', action='store_true', default=True)
 

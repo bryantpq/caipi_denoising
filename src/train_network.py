@@ -37,21 +37,36 @@ def main():
     logging.debug(images.shape)
     logging.debug(labels.shape)
 
-    logging.info('Shuffling data and doing train/valid split...')
-    shuffle_i = np.random.RandomState(seed=42).permutation(len(images))
-    images, labels = images[shuffle_i], labels[shuffle_i]
+    if config['train_network']['train_valid_split_shuffle']:
+        logging.info('Shuffling data and doing train/valid split...')
+        shuffle_i = np.random.RandomState(seed=42).permutation(len(images))
+        images, labels = images[shuffle_i], labels[shuffle_i]
+    else:
+        logging.info('Not shuffling data for train/valid split...')
     
     val_i = int( len(images) * config['train_network']['valid_split'] )
     X_train, y_train = images[:val_i], labels[:val_i]
     X_valid, y_valid = images[val_i:], labels[val_i:]
+
+    if config['trim_batch_end']:
+        train_lim = X_train.shape[0] // 32 * 32
+        valid_lim = X_valid.shape[0] // 32 * 32
+        X_train, y_train = X_train[:train_lim], y_train[:train_lim]
+        X_valid, y_valid = X_valid[:valid_lim], y_valid[:valid_lim]
 
     del images, labels
     
     logging.info('Train/Valid split:')
     logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
 
-    train_data = np_to_tfdataset(X_train, y_train, complex_split=config['complex_split'])
-    val_data   = np_to_tfdataset(X_valid, y_valid, complex_split=config['complex_split'])
+    train_data = np_to_tfdataset(
+            X_train, y_train,
+            batch_size=config['train_network']['batch_size'],
+            complex_split=config['complex_split'])
+    val_data   = np_to_tfdataset(
+            X_valid, y_valid,
+            batch_size=config['train_network']['batch_size'],
+            complex_split=config['complex_split'])
     
     logging.info('')
     logging.info('Creating model...')
@@ -63,7 +78,10 @@ def main():
                 loss_function=config['loss_function'],
                 input_shape=config['input_shape'],
                 load_model_path=train_params['load_model_path'],
-                learning_rate=train_params['learning_rate'])
+                learning_rate=train_params['learning_rate'],
+                window_size=train_params['window_size'],
+                init_alpha=train_params['init_alpha'],
+                noise_window_size=train_params['noise_window_size'])
 
     logging.info(model.summary())
 

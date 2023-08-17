@@ -11,7 +11,8 @@ Save/Load by slices/patches rather than whole array to track progress
 def load_dataset(data_folder, load_folds=None, postprocess_mode=None):
     files = os.listdir(data_folder)
 
-    if load_folds not in [None, False]: # filter files not to loaded
+    if load_folds not in [None, False, -1]:
+        # filter folds not to be loaded
         if type(load_folds) != list: load_folds = [ load_folds ]
         keep_files = []
         for fname in files:

@@ -10,12 +10,11 @@ import tensorflow as tf
 import yaml
 
 from sklearn.model_selection import KFold, train_test_split
-from preparation.gen_data import N_SUBJECTS, get_raw_data
+from preparation.gen_data import get_raw_data
 from preparation.preprocessing_pipeline import preprocess_data
 from preparation.extract_patches import extract_patches
 from utils.data_io import create_folders
 from utils.create_logger import create_logger
-
 
 def main():
     parser = create_parser()
@@ -26,62 +25,88 @@ def main():
     logging.info(config)
     logging.info('')
 
-    dataset_type = config['generate_dataset']['dataset_type']
     n_folds = config['generate_dataset']['n_folds']
+    dataset_type = config['generate_dataset']['dataset_type']
+    dataset_name = config['generate_dataset']['dataset_name']
 
-    if dataset_type in ['train', 'test']:
-        logging.info(f'Loading {dataset_type}ing set...')
-        data, names = get_raw_data(dataset_type, config['generate_dataset']['raw_data_modalities'])
-        # data.shape = [n_subj, 384, 312, 256]
-        # names = [subj_id_modality, ... ] '1_01_016-V1_3D_T2STAR_segEPI'
+    if type(dataset_type) == str: dataset_type = [ dataset_type ]
+    dataset_type_ = dataset_type
 
-        if n_folds in [False, None]:
-            logging.info(f'Splitting {dataset_type}ing set as 1 fold...')
-            idxs = list(range(N_SUBJECTS))
-            keep_idxs,holdout_idxs = train_test_split(idxs, test_size=0.2, random_state=42)
-            keep_data, holdout_data, keep_names, holdout_names = split_data(
-                    dataset_type, data, names, keep_idxs, holdout_idxs
-            )
+    for dataset_type in dataset_type_:
+        if dataset_type in ['train', 'test']:
+            logging.info(f'Loading {dataset_type}ing set...')
+            data, names = get_raw_data(dataset_type, config['generate_dataset']['raw_data_modalities'], dataset_name)
+            # TODO get number of subjects dynamically
+            if dataset_name == 'cavsms': 
+                n_subjects = 52
+            elif dataset_name == 'msrebs': 
+                n_subjects = 10
+            # data.shape = [n_subj, 384, 312, 256]
+            # names = [subj_id_modality, ... ] '1_01_016-V1_3D_T2STAR_segEPI'
 
-            if dataset_type == 'train':
-                process_fold(
-                        dataset_type,
-                        keep_data,
-                        keep_names,
-                        config,
-                        -1
-                )
-            elif dataset_type == 'test':
-                process_fold(
-                        dataset_type,
-                        holdout_data,
-                        holdout_names,
-                        config,
-                        -1
-                )
+            if n_folds in [False, None]:
+                logging.info(f'Splitting {dataset_type}ing set as 1 fold...')
+                idxs = list(range(n_subjects))
 
-        else:
-            logging.info(f'Splitting {dataset_type}ing set into {n_folds} folds...')
-            kf = KFold(n_folds, shuffle=True, random_state=42)
+                test_size = config['generate_dataset']['test_size']
+                if test_size == 0:
+                    keep_idxs, holdout_idxs = idxs, []
+                elif test_size == 1:
+                    keep_idxs, holdout_idxs = [], idxs
+                else:
+                    keep_idxs, holdout_idxs = train_test_split(idxs, test_size=test_size, random_state=config['generate_dataset']['split_seed'])
 
-            for fold_i, keep_holdout_idxs in enumerate(kf.split(range(N_SUBJECTS))):
-                keep_idxs, holdout_idxs = keep_holdout_idxs
                 keep_data, holdout_data, keep_names, holdout_names = split_data(
-                        dataset_type, data, names, keep_idxs, holdout_idxs
+                        dataset_type, dataset_name, data, names, keep_idxs, holdout_idxs
                 )
 
-                # for every fold, we save the holdout data NOT the keep data
-                # when loading for training/testing, we load the folds we want
-                process_fold(
-                        dataset_type,
-                        holdout_data,
-                        holdout_names,
-                        config,
-                        fold_i
-                )
+                if dataset_type == 'train':
+                    logging.info('Using keep set, discarding holdout set...')
+                    del holdout_data
+                    process_fold(
+                            dataset_type,
+                            keep_data,
+                            keep_names,
+                            config,
+                            -1
+                    )
+                elif dataset_type == 'test':
+                    logging.info('Using holdout set, discarding keep set...')
+                    del keep_data
+                    process_fold(
+                            dataset_type,
+                            holdout_data,
+                            holdout_names,
+                            config,
+                            -1
+                    )
 
-    elif dataset_type == 'reg_test':
-        raise NotImplementedError('To implement when data is ready')
+            else:
+                logging.info(f'Splitting {dataset_type}ing set into {n_folds} folds...')
+                kf = KFold(n_folds, shuffle=True, random_state=42)
+
+                for fold_i, keep_holdout_idxs in enumerate(kf.split(range(n_subjects))):
+                    keep_idxs, holdout_idxs = keep_holdout_idxs
+                    keep_data, holdout_data, keep_names, holdout_names = split_data(
+                            dataset_type, data, names, keep_idxs, holdout_idxs
+                    )
+
+                    # for every fold, we save the holdout data NOT the keep data
+                    # when loading for training/testing, we load the folds we want
+                    process_fold(
+                            dataset_type,
+                            holdout_data,
+                            holdout_names,
+                            config,
+                            fold_i
+                    )
+
+        elif dataset_type == 'reg_test':
+            raise NotImplementedError('To implement when data is ready')
+
+        logging.info('Completed generating {} dataset...'.format(dataset_type))
+        logging.info('')
+    logging.info('Completed config: {}'.format(config['config_name']))
 
 def process_fold(
         dataset_type,
@@ -118,7 +143,8 @@ def process_fold(
                 config['generate_dataset']['preprocessing_params'],
                 config['generate_dataset']['label_steps']
         )
-        logging.info('')
+
+        del images, labels
 
         if config['generate_dataset']['extract_patches']: # save as slices
             patches_params = config['generate_dataset']['extract_patches_params']
@@ -172,7 +198,6 @@ def process_fold(
                 config['generate_dataset']['preprocessing_params'],
                 config['generate_dataset']['input_steps']
         )
-        logging.info('')
 
         logging.info('Saving preprocessed testing inputs...')
         for image, name in zip(processed_inputs, names):
@@ -183,7 +208,7 @@ def process_fold(
             image_filename = os.path.join(FOLDER_PATH, 'inputs', filename)
             np.save(image_filename, image)
     
-def split_data(dataset_type, data, names, keep_idxs, holdout_idxs):
+def split_data(dataset_type, dataset_name, data, names, keep_idxs, holdout_idxs):
     keep_stack, holdout_stack = [], []
     keep_names, holdout_names = [], []
 
@@ -195,24 +220,45 @@ def split_data(dataset_type, data, names, keep_idxs, holdout_idxs):
             holdout_stack.append(data[j])
             holdout_names.append(names[j])
     elif dataset_type == 'test':
-        N_CAIPI_MODALITIES = 3
+        # TODO
+        # Get number of modalities dynamically
+        if dataset_name == 'cavsms': 
+            N_CAIPI_MODALITIES = 3
+        elif dataset_name == 'msrebs': 
+            N_CAIPI_MODALITIES = 1
         # names are sorted by: [subj_1_CAIPI2, subj_1_CAIPI3, subj_1_CAIPI4, ...]
+
         for i in keep_idxs:
+            # TODO
+            # creating lists should have dynamic sizing
             i = i * N_CAIPI_MODALITIES
-            keep_stack.extend([ data[i], data[i + 1], data[i + 2] ])
-            keep_names.extend([ names[i], names[i + 1], names[i + 2] ])
+            if dataset_name == 'cavsms':
+                subj_data  = [ data[i], data[i + 1], data[i + 2] ]
+                subj_names = [ names[i], names[i + 1], names[i + 2] ]
+            elif dataset_name == 'msrebs':
+                subj_data  = [ data[i], data[i + 1] ]
+                subj_names = [ names[i], names[i + 1] ]
+            keep_stack.extend(subj_data)
+            keep_names.extend(subj_names)
+
         for j in holdout_idxs:
             j = j * N_CAIPI_MODALITIES
-            holdout_stack.extend([ data[j], data[j + 1], data[j + 2] ])
-            holdout_names.extend([ names[j], names[j + 1], names[j + 2] ])
+            if dataset_name == 'cavsms':
+                subj_data  = [ data[j], data[j + 1], data[j + 2] ]
+                subj_names = [ names[j], names[j + 1], names[j + 2] ]
+            elif dataset_name == 'msrebs':
+                subj_data  = [ data[j], data[j + 1] ]
+                subj_names = [ names[j], names[j + 1] ]
+            holdout_stack.extend(subj_data)
+            holdout_names.extend(subj_names)
 
-    logging.info('Keep set:')
-    logging.info(keep_names)
-    logging.info('Holdout set:')
-    logging.info(holdout_names)
+    logging.info(f'Keep set: {len(keep_names)}')
+    logging.info(sorted(keep_names))
+    logging.info(f'Holdout set: {len(holdout_names)}')
+    logging.info(sorted(holdout_names))
 
-    keep_stack = np.stack(keep_stack)
-    holdout_stack = np.stack(holdout_stack)
+    if len(keep_stack) > 0: keep_stack = np.stack(keep_stack)
+    if len(holdout_stack) > 0: holdout_stack = np.stack(holdout_stack)
 
     return keep_stack, holdout_stack, keep_names, holdout_names
 

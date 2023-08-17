@@ -8,9 +8,11 @@ input_shape: [null, 384, 384, 1]
 n_folds: False
 test_fold: False
 complex_split: False
-loss_function: 'mae'
+loss_function: 'mse'
+trim_batch_end: True
 
 train_network:
+    train_valid_split_shuffle: False
     load_model_path: null 
     valid_split: 0.8
     n_epochs: 40
@@ -18,6 +20,8 @@ train_network:
     init_epoch: 0
     patience: 5
     batch_size: 32
+    window_size: null
+    init_alpha: [-1.0, 1.0]
 
 predict_test:
     load_model_path: ''

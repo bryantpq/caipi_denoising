@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-def np_to_tfdataset(arr1, arr2=None, complex_split=False):
+def np_to_tfdataset(arr1, arr2=None, batch_size=32, complex_split=False):
     if complex_split:
         real, imag = np.real(arr1), np.imag(arr1)
         real, imag = np.squeeze(real), np.squeeze(imag)
@@ -23,7 +23,6 @@ def np_to_tfdataset(arr1, arr2=None, complex_split=False):
     else:
         data = tf.data.Dataset.from_tensor_slices(arr1)
 
-    batch_size = 32
     data = data.batch(batch_size)
 
     options = tf.data.Options()

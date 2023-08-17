@@ -44,9 +44,9 @@ def get_training_cb(
 
     cb_tensorboard = tf.keras.callbacks.TensorBoard(
             log_dir=log_dir,
-            histogram_freq=1,
-            write_images=False,
-            write_graph=False)
+            histogram_freq=0,
+            write_graph=False,
+            write_images=False)
     
     cb_list = [cb_earlystop, cb_checkpoint, cb_tensorboard]
     

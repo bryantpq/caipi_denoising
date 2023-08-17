@@ -36,7 +36,9 @@ def main():
                 model_type=config['model_type'], 
                 loss_function=config['loss_function'],
                 input_shape=config['input_shape'],
-                load_model_path=config['predict_test']['load_model_path'])
+                load_model_path=config['predict_test']['load_model_path'],
+                init_alpha=[1, 1],
+                noise_window_size=config['train_network']['noise_window_size'])
 
     if config['predict_test']['extract_patches']:
         patch_size = config['input_shape'][1:3]
@@ -112,7 +114,7 @@ def main():
         write_data(output, output_name, config['save_dtype'])
 
         logging.info(f'Saving data to {output_name}')
-        logging.info('')
+        logging.info('------------------------------')
 
     logging.info('Prediction complete for config: {}'.format(config['config_name']))
 

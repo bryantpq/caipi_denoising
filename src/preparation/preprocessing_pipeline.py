@@ -10,7 +10,7 @@ def preprocess_data(data, params, steps):
     '''
     assert data.ndim == 4, 'Expected 4 dimensions. Given {}'.format(data.shape)
 
-    res = []
+    pp_subjs = []
 
     if np.iscomplexobj(data):
         data = data.astype('complex64')
@@ -28,9 +28,9 @@ def preprocess_data(data, params, steps):
                 pp_subj = func(pp_subj)
             else:
                 pp_subj = func(pp_subj, **params[name])
-        res.append(pp_subj)
+        pp_subjs.append(pp_subj)
 
-    return res
+    return pp_subjs
 
 def gen_pipeline(steps):
     """
@@ -40,7 +40,7 @@ def gen_pipeline(steps):
     
     if steps is not None:
         for step in steps:
-            if step == 'normalize':
+            if   step == 'normalize':
                 pipeline.append( (normalize, step) )
 
             elif step == 'pad_square':
@@ -57,6 +57,12 @@ def gen_pipeline(steps):
 
             elif step == 'white_noise':
                 pipeline.append( (white_noise, step) )
+
+            elif step in ['fourier_transform', 'ft']:
+                pipeline.append( (fourier_transform, step) )
+
+            elif step in ['inverse_fourier_transform', 'ift']:
+                pipeline.append( (inverse_fourier_transform, step) )
 
             else:
                 logging.info('Operation {} not supported'.format(step))
@@ -83,10 +89,11 @@ def normalize(data):
 def pad_square(data, pad_value=0.0):
     logging.debug(data.shape)
 
-    pad_len = (data.shape[0] - data.shape[1]) // 2
+    pad_len_0 = (384 - data.shape[0]) // 2
+    pad_len_1 = (384 - data.shape[1]) // 2
     data = np.pad(
             data, 
-            [(0, 0), (pad_len, pad_len), (0, 0)],
+            [(pad_len_0, pad_len_0), (pad_len_1, pad_len_1), (0, 0)],
             constant_values=pad_value
         )
     
@@ -148,24 +155,48 @@ def threshold_intensities(data, value=5000):
 
     return data
 
-def white_noise(data_stack, mu=0.0, sigma=0.2):
-    logging.debug(data_stack.shape)
+def white_noise(data_slices, mu=0.0, sigma=0.2):
+    logging.debug(data_slices.shape)
 
-    for subj_i in range(len(data_stack)):
-        data = data_stack[subj_i]
-        if type(sigma) == list:
-            sigma = np.random.choice(sigma)
+    for slc_i in range(data_slices.shape[-1]):
+        data = data_slices[:,:,slc_i]
+        if type(sigma) == list: sigma_ = np.random.choice(sigma)
+        else: sigma_ = sigma
 
         if np.iscomplexobj(data):
             max_real, max_imag = np.max(np.real(data)), np.max(np.imag(data))
-            real_noise_map = np.random.normal(mu, sigma * max_real, data.shape)
-            imag_noise_map = 1j * np.random.normal(mu, sigma * max_imag, data.shape)
-            data_stack[subj_i] = data + real_noise_map + imag_noise_map
+            real_noise_map = np.random.normal(mu, sigma_ * max_real, data.shape)
+            imag_noise_map = 1j * np.random.normal(mu, sigma_ * max_imag, data.shape)
+            data_slices[:,:,slc_i] = data + real_noise_map + imag_noise_map
         else:
             max_ = np.max(data)
-            noise_map = np.random.normal(mu, sigma * max_, data.shape)
-            data_stack[subj_i] = data + noise_map
+            noise_map = np.random.normal(mu, sigma_ * max_, data.shape)
+            data_slices[:,:,slc_i] = data + noise_map
 
-    logging.debug(data_stack.shape)
+    logging.debug(data_slices.shape)
 
-    return data_stack
+    return data_slices
+
+def fourier_transform(data, shift=True):
+    '''
+    Shift comes after the FT to operate on freq space.
+    '''
+    logging.debug(data.shape)
+
+    data = np.fft.fft2(data, axes=(0, 1))
+
+    if shift: data = np.fft.fftshift(data, axes=(0, 1))
+
+    return data
+
+def inverse_fourier_transform(data, shift=True):
+    '''
+    Shift comes before the FT to operate on freq space.
+    '''
+    logging.debug(data.shape)
+
+    if shift: data = np.fft.ifftshift(data)
+
+    data = np.fft.ifft2(data)
+
+    return data
