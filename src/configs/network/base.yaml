@@ -1,0 +1,25 @@
+input_folder: '/home/quahb/caipi_denoising/data/datasets/unaccelerated/3D_full_compleximage'
+
+dimensions: 3
+data_format: 'full'
+valid_split: 0.8
+trim_batch_end: False
+complex_split: False
+batch_size: 1
+n_epochs: 40
+init_epoch: 0
+patience: 5
+
+network:
+    model_type: 'complex_dncnn'
+    input_shape: [null, 384, 384, 256]
+    load_model_path: null 
+    loss_function: 'mse'
+    learning_rate: 0.001
+
+logging_level: 'info'
+gpus:
+- /GPU:0
+- /GPU:1
+- /GPU:2
+- /GPU:3
