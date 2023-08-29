@@ -3,14 +3,11 @@ import numpy as np
 import tensorflow as tf
 import pdb
 
-
-def preprocess_data(data, params, steps):
+def preprocess_data(data, params, steps, subj_i=None):
     '''
-    Given numpy array of data, return list of arrays for each subject
+    Given a numpy array of a single subject, preprocess and return it.
     '''
-    assert data.ndim == 4, 'Expected 4 dimensions. Given {}'.format(data.shape)
-
-    pp_subjs = []
+    assert data.ndim == 3, f'Expected 3 dimensional data. Given {data.shape}'
 
     if np.iscomplexobj(data):
         data = data.astype('complex64')
@@ -18,19 +15,17 @@ def preprocess_data(data, params, steps):
         data = data.astype('float32')
 
     pipeline = gen_pipeline(steps=steps)
-    for subj_i, subject_data in enumerate(data):
-        temp_data = np.copy(subject_data)
-        pp_subj = temp_data
-        for func, name in pipeline:
-            if name == 'random_xy_flip':
-                pp_subj = func(pp_subj, subj_i, **params[name])
-            elif params[name] is None:
-                pp_subj = func(pp_subj)
-            else:
-                pp_subj = func(pp_subj, **params[name])
-        pp_subjs.append(pp_subj)
+    pp_data = np.copy(data)
+    for func, name in pipeline:
+        if name == 'random_xy_flip':
+            assert subj_i is not None
+            pp_data = func(pp_data, subj_i, **params[name])
+        elif params[name] is None:
+            pp_data = func(pp_data)
+        else:
+            pp_data = func(pp_data, **params[name])
 
-    return pp_subjs
+    return pp_data
 
 def gen_pipeline(steps):
     """
@@ -48,6 +43,9 @@ def gen_pipeline(steps):
 
             elif step == 'random_xy_flip':
                 pipeline.append( (random_xy_flip, step) )
+
+            elif step == 'rescale_range':
+                pipeline.append( (rescale_range, step) )
 
             elif step == 'standardize':
                 pipeline.append( (standardize, step) )
@@ -133,6 +131,13 @@ def standardize(data):
     logging.debug(data.shape)
 
     return data
+
+def rescale_range(data, t_min, t_max):
+    r_min, r_max = np.min(data), np.max(data)
+    num = data - r_min
+    den = r_max - r_min
+
+    return (num / den) * (t_max - t_min) + t_min
 
 def threshold_intensities(data, value=5000):
     logging.debug(data.shape)

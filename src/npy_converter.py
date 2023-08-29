@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
-
 import argparse
+import nibabel as nib
 import numpy as np
 import os
 import scipy.io
@@ -18,8 +17,15 @@ def main():
             print('Exiting...')
             return
 
-    RESULT_DIR = 'mat'
+    if args.format in ['nifti', 'nii']:
+        RESULT_DIR = 'nii'
+        FILE_EXT = 'nii.gz'
+    elif args.format == 'mat':
+        RESULT_DIR = 'mat'
+        FILE_EXT = 'mat'
+
     files = os.listdir(args.path)
+    files = [ f for f in files if '.npy' in f ]
     print('Found {} files at {}'.format(len(files), args.path))
     if args.path != False: # prepend file paths to load
         files = [ os.path.join(args.path, f) for f in files ]
@@ -31,18 +37,25 @@ def main():
     for i, f in enumerate(files):
         print(f'{i+1}/{len(files)}')
         print('Loading file: {}'.format(f))
-        a = np.load(f)
+        data = np.load(f)
         fname = f.split('/')[-1]
-        fname = fname[:-3] + 'mat' # replace npy extension with mat
+        fname = fname[:-3] + FILE_EXT
         fname = os.path.join(RESULT_DIR, fname)
         print('Saving file: {}'.format(fname))
-        scipy.io.savemat(fname, dict(x=a))
+
+        if args.format in ['nifti', 'nii']:
+            nii_data = nib.Nifti1Image(data, affine=np.eye(4))
+            nib.save(nii_data, fname)
+        elif args.format == 'mat':
+            scipy.io.savemat(fname, dict(x=data))
 
     print('Complete!')
 
 def create_parser():
     parser = argparse.ArgumentParser()
+    example_str = 'python npy_converter.npy /path/to/dir [nii, mat]'
     parser.add_argument('path', default=False)
+    parser.add_argument('format', choices=['nifti', 'nii', 'mat'])
 
     return parser
 

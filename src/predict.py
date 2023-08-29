@@ -4,30 +4,35 @@ import nibabel as nib
 import numpy as np
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+#os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
 import pdb
 import tensorflow as tf
 from tqdm import tqdm
 import yaml
 
-from modeling.get_model import get_model
-from preparation.prepare_tf_dataset import np_to_tfdataset
-from utils.data_io import write_data
-
 from patchify import patchify, unpatchify
+
+from modeling.get_model import get_model
+from preparation.data_io import write_data
+from preparation.prepare_tf_dataset import np_to_tfdataset
+
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
 
+    input_shape = [None] + args.input_size + [1]
+    network_params = {
+        'dimensions': args.dimensions,
+        'model_type': args.model_type,
+        'input_shape': input_shape,
+        'load_model_path': args.model_path
+    }
+
     print(f'Creating model {args.model_type}...')
     strategy = tf.distribute.MirroredStrategy()
-    input_shape = [None] + args.input_size + [1]
     with strategy.scope():
-        model = get_model(
-                model_type=args.model_type, 
-                loss_function=args.loss_function,
-                input_shape=input_shape,
-                load_model_path=args.model_path)
+        model = get_model(**network_params)
 
     if args.type_dir:
         files_to_load = os.listdir(args.input_path)
@@ -46,6 +51,7 @@ def main():
             data = np.load(cur_file)
 
         if args.extract_patches:
+            raise NotImplementedError('Predicting on patches not yet implemented correctly for 3D. ~Aug 2023')
             patch_size = args.input_size
             extract_step = args.extract_step
             # extract patches for every slice in subject
@@ -101,7 +107,8 @@ def main():
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    example_str = 'python predict.py complex_dncnn mse --type_dir ../data/datasets/test/msrebs_all_testing/{inputs,outputs} ../models/compleximage_full_cdncnn_2022-12-15/complex_dncnn_ep26.h5 384 384'
+    example_str = 'python predict.py 3 complex_dncnn mse --type_dir ../data/datasets/test/msrebs_all_testing/{inputs,outputs} ../models/compleximage_full_cdncnn_2022-12-15/complex_dncnn_ep26.h5 384 384'
+    parser.add_argument('dimensions', type=int, choices=[2, 3])
     parser.add_argument('model_type', choices=['dncnn', 'res_dncnn', 'complex_dncnn'])
     parser.add_argument('loss_function', choices=['mae', 'mse'])
     parser.add_argument('--type_dir', action='store_true', help='input_path/output_path will be intepreted as dirs')
