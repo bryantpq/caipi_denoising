@@ -21,7 +21,11 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    input_shape = [None] + args.input_size + [1]
+    if args.dimensions == 2:
+        input_shape = [None] + args.input_size + [1]
+    elif args.dimensions == 3:
+        input_shape = [None] + args.input_size
+
     network_params = {
         'dimensions': args.dimensions,
         'model_type': args.model_type,
@@ -46,7 +50,7 @@ def main():
         print(f'\nLoading file: {cur_file}...')
         fname, fext = os.path.splitext(cur_file)
         if 'nii' in fext:
-            data = nib.load(cur_file).get_fdata()
+            data = np.array(nib.load(cur_file).dataobj)
         elif 'npy' in fext:
             data = np.load(cur_file)
 
@@ -93,31 +97,33 @@ def main():
             data = np.squeeze(data)
             output = np.moveaxis(data, 0, -1)
 
-        save_dtype = 'complex64' if 'complex' in args.model_type else 'float16'
-
         if args.type_dir: 
             f_name = cur_file.split('/')[-1]
             out_name = os.path.join(args.output_path, f_name)
         else: 
             out_name = args.output_path
 
+        if np.iscomplexobj(output):
+            save_dtype = 'complex64'
+        else:
+            save_dtype = 'float16'
         write_data(output, out_name, save_dtype)
         print(f'Saving {out_name}')
 
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    example_str = 'python predict.py 3 complex_dncnn mse --type_dir ../data/datasets/test/msrebs_all_testing/{inputs,outputs} ../models/compleximage_full_cdncnn_2022-12-15/complex_dncnn_ep26.h5 384 384'
+    example_str = 'python predict.py 3 cdncnn mse --type_dir ../data/datasets/test/msrebs_all_testing/{inputs,outputs} ../models/compleximage_full_cdncnn_2022-12-15/complex_dncnn_ep26.h5 384 384'
     parser.add_argument('dimensions', type=int, choices=[2, 3])
-    parser.add_argument('model_type', choices=['dncnn', 'res_dncnn', 'complex_dncnn'])
+    parser.add_argument('model_type', choices=['dncnn', 'res_dncnn', 'cdncnn'])
     parser.add_argument('loss_function', choices=['mae', 'mse'])
     parser.add_argument('--type_dir', action='store_true', help='input_path/output_path will be intepreted as dirs')
     parser.add_argument('input_path')
     parser.add_argument('output_path')
     parser.add_argument('model_path')
-    parser.add_argument('input_size', nargs=2, type=int, help='[ length width ]')
+    parser.add_argument('input_size', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('--extract_patches', action='store_true')
-    parser.add_argument('--extract_step', nargs=2, type=int, help='[ length width ]')
+    parser.add_argument('--extract_step', nargs='+', type=int, help='[ length width ]')
 
     return parser
 

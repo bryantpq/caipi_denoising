@@ -5,9 +5,10 @@ import tensorflow as tf
 from tensorflow.keras import layers, losses, Sequential, Input
 from tensorflow.keras.models import Model
 
-from modeling.custom_utils import DCTConvLayer, IDCTConvLayer, SSLayer
-from modeling.custom_utils import complex_conv2d, complex_conv3d, complex_conv_transpose, complex_conv1d
-from modeling.custom_utils import crelu, zrelu, modrelu, cardioid, softshrink
+from modeling.DCT import DCTConvLayer, IDCTConvLayer
+from modeling.softshrink import SSLayer, softshrink
+from modeling.complex_utils import complex_conv2d, complex_conv3d, complex_conv_transpose, complex_conv1d
+from modeling.complex_utils import crelu, zrelu, modrelu, cardioid
 
 
 def dncnn(

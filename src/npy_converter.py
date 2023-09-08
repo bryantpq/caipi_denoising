@@ -4,9 +4,9 @@ import numpy as np
 import os
 import scipy.io
 
-'''
-Program to convert npy files in a given array to mat format.
-'''
+from tqdm import tqdm
+
+
 def main():
     parser = create_parser()
     args = parser.parse_args()
@@ -27,15 +27,13 @@ def main():
     files = os.listdir(args.path)
     files = [ f for f in files if '.npy' in f ]
     print('Found {} files at {}'.format(len(files), args.path))
-    if args.path != False: # prepend file paths to load
-        files = [ os.path.join(args.path, f) for f in files ]
-        RESULT_DIR = os.path.join(args.path, RESULT_DIR)
+    files = [ os.path.join(args.path, f) for f in files ]
+    RESULT_DIR = os.path.join(args.path, RESULT_DIR)
 
     if not os.path.exists(RESULT_DIR):
         os.makedirs(RESULT_DIR)
 
-    for i, f in enumerate(files):
-        print(f'{i+1}/{len(files)}')
+    for f in tqdm(files, ncols=100):
         print('Loading file: {}'.format(f))
         data = np.load(f)
         fname = f.split('/')[-1]
@@ -53,9 +51,9 @@ def main():
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    example_str = 'python npy_converter.npy /path/to/dir [nii, mat]'
-    parser.add_argument('path', default=False)
+    example_str = 'python npy_converter.py {nii, mat} /path/to/dir'
     parser.add_argument('format', choices=['nifti', 'nii', 'mat'])
+    parser.add_argument('path', default=False)
 
     return parser
 

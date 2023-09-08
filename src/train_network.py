@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import os
 import pdb
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-12.1.105-0'
 os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
@@ -37,10 +37,11 @@ def main():
     labels_path = os.path.join(config['input_folder'], 'labels')
     images = load_dataset(images_path, dimensions, data_format)
     labels = load_dataset(labels_path, dimensions, data_format)
-    images, labels = np.expand_dims(images, axis=-1), np.expand_dims(labels, axis=-1)
 
-#    N_TO_USE = 20 # should be at least 20
-#    images, labels = images[:N_TO_USE], labels[:N_TO_USE]
+    logging.info(f'Images, Labels dimensions: {images.shape}, {labels.shape}')
+
+    #N_TO_USE = 3000 # should be at least 20
+    #images, labels = images[:N_TO_USE], labels[:N_TO_USE]
 
     memory_used = images.nbytes * 2 / (1024 * 1024 * 1024)
     logging.info(f'Dataset size: {images.nbytes}  *  2  =  {memory_used} GB')

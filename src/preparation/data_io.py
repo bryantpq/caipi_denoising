@@ -1,11 +1,12 @@
 import logging
 import multiprocessing as mp
+import nibabel as nib
 import numpy as np
 import os
 import pdb
 from tqdm import tqdm
 
-from preparation.preprocessing_pipeline import rescale_range
+from preparation.preprocessing_pipeline import rescale_magnitude
 
 
 def load_dataset(data_folder, dimensions, data_format, return_names=False):
@@ -16,7 +17,16 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False):
     pbar = tqdm(files, ncols=110)
     for f in pbar:
         pbar.set_description(f'{f}')
-        data.append( np.load(os.path.join(data_folder, f)) )
+
+        file_ext = '.'.join(f.split('.')[1:])
+
+        fpath = os.path.join(data_folder, f)
+        if file_ext == 'npy':
+            data.append( np.load(fpath) )
+        elif file_ext == 'nii.gz':
+            data.append( np.array(nib.load(fpath).dataobj) )
+        else:
+            raise ValueError(f'Detected bad file extension: {file_ext}')
 
     if dimensions == 2:
         if data_format == 'full': # use full volumes for training [384, 384, 256]
@@ -25,7 +35,8 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False):
         elif data_format == 'patches': # use patches for training eg. [1000, 256, 256]
             data = np.vstack(data)
 
-        data = np.expand_dims(data, axis=3)
+        data = np.expand_dims(data, axis=-1)
+        assert data.ndim == 4, '2D Data for training should be 4 dimensional: [num_samples, dim1, dim2, dim3]'
 
     elif dimensions == 3:
         if data_format == 'full': # use full volumes for training [384, 384, 256]
@@ -33,7 +44,8 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False):
         elif data_format == 'patches': # use patches for training eg. [9, 256, 256, 256]
             data = np.vstack(data)
 
-    assert data.ndim == 4, 'Data for training should be 4 dimensional: [num_samples, dim1, dim2, dim3]'
+        data = np.expand_dims(data, axis=-1)
+        assert data.ndim == 5, '3D Data for training should be 5 dimensional: [num_samples, dim1, dim2, dim3, 1]'
 
     if return_names:
         return data, files
@@ -58,7 +70,7 @@ def load_niftis(load_path, load_modalities, combine_mag_phase=True):
             for fp in file_paths:
                 fname = fp.split('/')[-1].split('.')[0]
                 if lm == fname: # e.g. CAIPI1x2 in ../data/dataset/subj_id/CAIPI1x2.nii.gz
-                    tmp = nib.load(fp).get_fdata()
+                    tmp = np.array(nib.load(fp).dataobj)
                     res[subj][lm] = tmp
 
     if combine_mag_phase:
@@ -67,7 +79,7 @@ def load_niftis(load_path, load_modalities, combine_mag_phase=True):
     return res, len(subj_ids)
 
 def _combine_mag_phase(data_dict, remove_noncomplex=True):
-    pbar = tqdm(list(data_dict.keys()), ncols=150, total=len(data_dict.keys()))
+    pbar = tqdm(list(data_dict.keys()), ncols=100, total=len(data_dict.keys()))
     for subj in pbar:
         pbar.set_description(f'Reconstructing complex data for {subj}')
         subj_modalities = data_dict[subj].keys()
@@ -91,8 +103,8 @@ def _combine_mag_phase(data_dict, remove_noncomplex=True):
 def magphase2complex(mag, pha):
     assert mag.shape == pha.shape
 
-    re_mag = rescale_range(mag, 0, 1)
-    re_pha = rescale_range(pha, -np.pi, np.pi)
+    re_mag = rescale_magnitude(mag, 0, 1)
+    re_pha = rescale_magnitude(pha, -np.pi, np.pi)
 
     complex_image = np.multiply(re_mag, np.exp(1j * re_pha)).astype('complex64')
 

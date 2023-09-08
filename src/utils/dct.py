@@ -1,4 +1,3 @@
-from numpy import r_
 from scipy.fftpack import dct, dst, fft, ifft, idct
 
 def dct2(a):

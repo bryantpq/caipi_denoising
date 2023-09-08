@@ -27,7 +27,7 @@ def get_training_cb(
         os.makedirs(save_path)
         logging.info("Creating new folder for model weights: {}".format(save_path))
     
-    save_filename = '{}'.format(model_type) + '_ep{epoch:02d}.h5'
+    save_filename = model_type + '_ep{epoch:02d}.h5'
     save_filename = os.path.join(save_path, save_filename)
     cb_checkpoint = tf.keras.callbacks.ModelCheckpoint(
             filepath=save_filename,

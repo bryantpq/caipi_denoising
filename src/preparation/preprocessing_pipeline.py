@@ -44,11 +44,8 @@ def gen_pipeline(steps):
             elif step == 'random_xy_flip':
                 pipeline.append( (random_xy_flip, step) )
 
-            elif step == 'rescale_range':
-                pipeline.append( (rescale_range, step) )
-
-            elif step == 'standardize':
-                pipeline.append( (standardize, step) )
+            elif step == 'rescale_magnitude':
+                pipeline.append( (rescale_magnitude, step) )
 
             elif step == 'threshold_intensities':
                 pipeline.append( (threshold_intensities, step) )
@@ -120,19 +117,8 @@ def random_xy_flip(data, subj_i, seed=24, mode='slice'):
 
     return data
 
-def standardize(data):
+def rescale_magnitude(data, t_min=0.0, t_max=1.0):
     logging.debug(data.shape)
-
-    min_, max_ = np.min(data), np.max(data)
-    num  = data - min_
-    den  = max_ - min_
-    data = num / den
-
-    logging.debug(data.shape)
-
-    return data
-
-def rescale_range(data, t_min, t_max):
     r_min, r_max = np.min(data), np.max(data)
     num = data - r_min
     den = r_max - r_min

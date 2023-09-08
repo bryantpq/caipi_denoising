@@ -10,6 +10,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tqdm import tqdm
 
+from modeling.complex_utils import complex_conv2d, crelu
 from utils.dct import dct2, idct2
 from utils.vizualization_tools import plot2, plot4, plot_slices, plot_patches
 
@@ -266,7 +267,47 @@ class DiffusionModel(keras.Model):
         # 10. Return loss values
         return {"loss": loss}
 
-    def denoise_images(
+    def denoise_image(
+        self,
+        image, 
+        denoise_timesteps,
+        regularization_image=None,
+        lambduh=0.005, 
+        batch_size=16
+    ):
+        assert image.shape == (384, 384, 256)
+
+        if denoise_timesteps > self.timesteps:
+            raise ValueError(f'Given timestep parameter: {denoise_timesteps}. Cannot be greater than model: {self.timesteps}')
+
+        image = np.moveaxis(image, -1, 0)
+        image = np.expanddims(image, axis=-1)
+
+        # t is [denoise_timesteps - 1, 0], e.g. 199 - 0
+        for t in tqdm(
+            reversed(range(0, denoise_timesteps)), 
+            ncols=100, 
+            desc=f'denoising {denoise_timesteps} times',
+            bar_format='{l_bar}{bar}{r_bar}',
+            total=denoise_timesteps
+        ):
+            tt = tf.cast(tf.fill(image.shape[0], t), dtype=tf.int64)
+            pred_noise = self.ema_network.predict(
+                [image, tt], verbose=0, batch_size=batch_size
+            )
+            image = self.gdf_util.p_sample(
+                pred_noise, image, tt, clip_denoised=True
+            )
+
+            if regularization_image: 
+                image = lambduh * regularization_image + (1 - lambduh) * image
+
+        image = np.squeeze(image)
+        image = np.moveaxis(image, 0, 1)
+
+        return image
+
+    def denoise_images_dct(
         self,
         images, 
         denoise_timesteps,
@@ -296,7 +337,7 @@ class DiffusionModel(keras.Model):
                     high_freq_img[:, i, j, :, :] = dct_vect
                     zero_freq_img[:, i, j, :]    = dct_vect[:, :, 0]
                     
-            compound_freq_img = np.zeros( high_freq_img.shape[:-1], dtype='float32') # (num_images, 384, 384, 1)
+            compound_freq_img = np.zeros(high_freq_img.shape[:-1], dtype='float32') # (num_images, 384, 384, 1)
 
             for kf in keep_freq: compound_freq_img += high_freq_img[:, :, :, :, kf]
 
