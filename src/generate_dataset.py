@@ -83,8 +83,8 @@ def main():
 
             if config['extract_patches']:
                 ep_params = config['extract_patches_params']
-                processed_image = extract_patches(processed_image, config['dimensions'], **ep_params)
-                processed_label = extract_patches(processed_label, config['dimensions'], **ep_params)
+                processed_image = extract_patches(processed_image, config['extract_dimensions'], **ep_params)
+                processed_label = extract_patches(processed_label, config['extract_dimensions'], **ep_params)
 
             image_fname = os.path.join(output_folder, 'images', n)
             label_fname = os.path.join(output_folder, 'labels', n)
