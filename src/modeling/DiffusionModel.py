@@ -1,9 +1,10 @@
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pdb
 import sys
 import tensorflow as tf
-import matplotlib.pyplot as plt
 
 from numpy import r_
 from tensorflow import keras
@@ -11,7 +12,6 @@ from tensorflow.keras import layers
 from tqdm import tqdm
 
 from modeling.complex_utils import complex_conv2d, crelu
-from utils.dct import dct2, idct2
 from utils.vizualization_tools import plot2, plot4, plot_slices, plot_patches
 
 # Kernel initializer to use
@@ -63,6 +63,39 @@ class AttentionBlock(layers.Layer):
         return inputs + proj
 
 
+class ImageEmbedding(layers.Layer):
+    def __init__(self, n_layers=4, feature_maps=[64,64,64,64], activation_fn=keras.activations.swish, **kwargs):
+        super().__init__(**kwargs)
+        assert n_layers == len(feature_maps)
+        self.activation_fn = activation_fn
+
+        self.conv_layers = []
+
+        for filters in feature_maps:
+            self.conv_layers.append(
+                    layers.Conv2D(filters, kernel_size=3, padding='same')
+            )
+            self.conv_layers.append(
+                    layers.MaxPooling2D(pool_size=(2, 2))
+            )
+
+        self.out_layers = [
+                layers.Flatten(),
+                layers.Dense(256, activation=activation_fn),
+                layers.Dense(256)
+        ]
+
+    def call(self, inputs):
+        inputs = tf.cast(inputs, dtype=tf.float32)
+
+        for op in self.conv_layers:
+            inputs = op(inputs)
+
+        for op in self.out_layers:
+            inputs = op(inputs)
+
+        return inputs
+
 class TimeEmbedding(layers.Layer):
     def __init__(self, dim, **kwargs):
         super().__init__(**kwargs)
@@ -77,6 +110,14 @@ class TimeEmbedding(layers.Layer):
         emb = tf.concat([tf.sin(emb), tf.cos(emb)], axis=-1)
         return emb
 
+
+def TimeMLP(units, activation_fn=keras.activations.swish):
+    def apply(inputs):
+        temb = layers.Dense(units, activation=activation_fn, kernel_initializer=kernel_init(1.0))(inputs)
+        temb = layers.Dense(units, kernel_initializer=kernel_init(1.0))(temb)
+        return temb
+
+    return apply
 
 def ResidualBlock(width, groups=8, activation_fn=keras.activations.swish):
     def apply(inputs):
@@ -139,17 +180,6 @@ def UpSample(width, interpolation="nearest"):
     return apply
 
 
-def TimeMLP(units, activation_fn=keras.activations.swish):
-    def apply(inputs):
-        temb = layers.Dense(
-            units, activation=activation_fn, kernel_initializer=kernel_init(1.0)
-        )(inputs)
-        temb = layers.Dense(units, kernel_initializer=kernel_init(1.0))(temb)
-        return temb
-
-    return apply
-
-
 def build_model(
     img_size,
     img_channels,
@@ -160,11 +190,10 @@ def build_model(
     norm_groups=8,
     interpolation="nearest",
     activation_fn=keras.activations.swish,
+    image_embedding=False
 ):
-    image_input = layers.Input(
-        shape=(img_size, img_size, img_channels), name="image_input"
-    )
-    time_input = keras.Input(shape=(), dtype=tf.int64, name="time_input")
+    image_input = layers.Input(shape=(img_size, img_size, img_channels), name="image_input")
+    time_input  = keras.Input(shape=(), dtype=tf.int64, name="time_input")
 
     x = layers.Conv2D(
         first_conv_channels,
@@ -175,6 +204,11 @@ def build_model(
 
     temb = TimeEmbedding(dim=first_conv_channels * 4)(time_input)
     temb = TimeMLP(units=first_conv_channels * 4, activation_fn=activation_fn)(temb)
+
+    if image_embedding:
+        image_emb_input = layers.Input(shape=(img_size, img_size, img_channels), name='image_emb_input')
+        iemb = ImageEmbedding(n_layers=4, feature_maps=[64, 64, 64, 64])(image_emb_input)
+        temb = layers.Add()([iemb, temb])
 
     skips = [x]
 
@@ -219,16 +253,20 @@ def build_model(
     x = activation_fn(x)
     x = layers.Conv2D(img_channels, (3, 3), padding="same", kernel_initializer=kernel_init(0.0))(x)
 
-    return keras.Model([image_input, time_input], x, name="unet")
+    if image_embedding:
+        return keras.Model([image_input, time_input, image_emb_input], x, name='unet_img_emb')
+    else:
+        return keras.Model([image_input, time_input], x, name="unet")
 
 
 class DiffusionModel(keras.Model):
-    def __init__(self, network, ema_network, timesteps, gdf_util, ema=0.999):
+    def __init__(self, network, ema_network, timesteps, gdf_util, image_embedding=False, ema=0.999):
         super().__init__()
         self.network = network
         self.ema_network = ema_network
         self.timesteps = timesteps
         self.gdf_util = gdf_util
+        self.image_embedding = image_embedding
         self.ema = ema
 
     def train_step(self, images):
@@ -248,7 +286,11 @@ class DiffusionModel(keras.Model):
             images_t = self.gdf_util.q_sample(images, t, noise)
 
             # 5. Pass the diffused images and time steps to the network
-            pred_noise = self.network([images_t, t], training=True)
+            if self.image_embedding:
+                inputs = [images_t, t, images_t]
+            else:
+                inputs = [images_t, t]
+            pred_noise = self.network(inputs, training=True)
 
             # 6. Calculate the loss
             loss_obj = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)
@@ -273,15 +315,19 @@ class DiffusionModel(keras.Model):
         denoise_timesteps,
         regularization_image=None,
         lambduh=0.005, 
-        batch_size=16
+        batch_size=8
     ):
         assert image.shape == (384, 384, 256)
 
         if denoise_timesteps > self.timesteps:
             raise ValueError(f'Given timestep parameter: {denoise_timesteps}. Cannot be greater than model: {self.timesteps}')
 
+        # prepare image for denoising and regularization image too
         image = np.moveaxis(image, -1, 0)
-        image = np.expanddims(image, axis=-1)
+        image = np.expand_dims(image, axis=-1)
+
+        regularization_image = np.moveaxis(regularization_image, -1, 0)
+        regularization_image = np.expand_dims(regularization_image, axis=-1)
 
         # t is [denoise_timesteps - 1, 0], e.g. 199 - 0
         for t in tqdm(
@@ -291,83 +337,26 @@ class DiffusionModel(keras.Model):
             bar_format='{l_bar}{bar}{r_bar}',
             total=denoise_timesteps
         ):
-            tt = tf.cast(tf.fill(image.shape[0], t), dtype=tf.int64)
+            tt = tf.cast(tf.fill(image.shape[0], t), dtype=tf.int64) # create vector of shape [256,] with all values set to t
+
+            if self.image_embedding:
+                inputs = [image, tt, regularization_image]
+            else:
+                inputs = [image, tt]
             pred_noise = self.ema_network.predict(
-                [image, tt], verbose=0, batch_size=batch_size
+                inputs, verbose=0, batch_size=batch_size
             )
             image = self.gdf_util.p_sample(
                 pred_noise, image, tt, clip_denoised=True
             )
 
-            if regularization_image: 
-                image = lambduh * regularization_image + (1 - lambduh) * image
+#            if regularization_image is not None: 
+#                image = lambduh * regularization_image + (1 - lambduh) * image
 
         image = np.squeeze(image)
-        image = np.moveaxis(image, 0, 1)
+        image = np.moveaxis(image, 0, -1)
 
         return image
-
-    def denoise_images_dct(
-        self,
-        images, 
-        denoise_timesteps,
-        regularization=True, 
-        lambduh=0.005, 
-        window_len=7, 
-        keep_freq=[0],
-        inference_batch_size=16
-    ):
-        if denoise_timesteps > self.timesteps:
-            raise ValueError(f'Given timestep parameter: {denoise_timesteps}. Cannot be greater than model: {self.timesteps}')
-        
-        num_images = images.shape[0]
-        img_shape  = (images.shape[1], images.shape[2])
-        
-        if regularization:
-            zero_freq_img = np.zeros((num_images, ) + img_shape + (1, ), dtype='float32') # (num_images, 384, 384, 1)
-            high_freq_img = np.zeros((num_images, ) + img_shape + (1, ) + (window_len * window_len, ), dtype='float32') # (num_images, 384, 384, 1, 49)
-
-            for i in r_[:img_shape[0] - window_len]:
-                for j in r_[:img_shape[1] - window_len]:
-                    patch = images[:, i:i + window_len, j:j + window_len]
-                    dct_patch = dct2(patch)
-                    dct_vect = dct_patch.reshape((num_images, -1, 1)) # (256, 49, 1)
-                    dct_vect = np.moveaxis(dct_vect, 1, -1)
-                    
-                    high_freq_img[:, i, j, :, :] = dct_vect
-                    zero_freq_img[:, i, j, :]    = dct_vect[:, :, 0]
-                    
-            compound_freq_img = np.zeros(high_freq_img.shape[:-1], dtype='float32') # (num_images, 384, 384, 1)
-
-            for kf in keep_freq: compound_freq_img += high_freq_img[:, :, :, :, kf]
-
-            if denoise_timesteps == 1:
-                plot2(images[128,:,:,:], compound_freq_img[128,:,:,:], title=['Original', f'Freq {keep_freq}'])
-                plt.show()
-
-        # t is [denoise_timesteps - 1, 0], e.g. 199 - 0
-        for t in tqdm(
-            reversed(range(0, denoise_timesteps)), 
-            ncols=100, 
-            desc=f'denoising {denoise_timesteps} times',
-            bar_format='{l_bar}{bar}{r_bar}',
-            total=denoise_timesteps
-        ):
-            tt = tf.cast(tf.fill(num_images, t), dtype=tf.int64)
-            pred_noise = self.ema_network.predict(
-                [images, tt], verbose=0, batch_size=inference_batch_size
-            )
-            images = self.gdf_util.p_sample(
-                pred_noise, images, tt, clip_denoised=True
-            )
-
-            #plot2(pred_noise[128,:,:], images[128,:,:], title=['pred noise', 'noise removed'])
-
-            if regularization:
-                before_images = np.copy(images)
-                images = lambduh * compound_freq_img + (1 - lambduh) * images
-
-        return images
 
     def generate_images(self, num_images=4, img_size=384, img_channels=1):
         # 1. Randomly sample noise (starting point for reverse process)
@@ -382,8 +371,12 @@ class DiffusionModel(keras.Model):
             total=self.timesteps
         ):
             tt = tf.cast(tf.fill(num_images, t), dtype=tf.int64)
+            if self.image_embedding:
+                inputs = [samples, tt, samples]
+            else:
+                inputs = [samples, tt]
             pred_noise = self.ema_network.predict(
-                [samples, tt], verbose=0, batch_size=num_images
+                inputs, verbose=0, batch_size=num_images
             )
             samples = self.gdf_util.p_sample(
                 pred_noise, samples, tt, clip_denoised=True
@@ -411,15 +404,24 @@ class DiffusionModel(keras.Model):
                 ax[i // num_cols, i % num_cols].imshow(image, cmap='gray')
                 ax[i // num_cols, i % num_cols].axis("off")
 
+        if self.image_embedding:
+            path = './diffusion_imgemb_images'
+        else:
+            path = './diffusion_images'
+
         fig.suptitle(f'Epoch: {epoch}')
         plt.tight_layout()
-        plt.savefig(f"./diffusion_images/ep{epoch}.png")
+        plt.savefig(os.path.join(path, f"imgemb_ep{epoch}.png"))
         plt.show()
         
     def save_model(
         self, epoch=None, logs=None
     ):
+        if self.image_embedding:
+            path = './diffusion_imgemb_models'
+        else:
+            path = './diffusion_models'
+
         if epoch % 10 == 0:
-            path = './diffusion_models/'
             self.network.save_weights(os.path.join(path, f'diffusion_ep{epoch}.hd5'))
             self.ema_network.save_weights(os.path.join(path, f'ema_diffusion_ep{epoch}.hd5'))

@@ -2,10 +2,20 @@ import argparse
 import logging
 import numpy as np
 import os
+import socket
 import pdb
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
-os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-12.1.105-0'
+
+
+hostname = socket.gethostname()
+if 'titan' in hostname:
+    os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-12.1.105-0'
+elif 'compbio' in hostname:
+    os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-11.8.89-0'
+else:
+    raise ValueError(f'Unknown hostname: {hostname}')
+
 os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tensorflow as tf
@@ -70,6 +80,11 @@ def main():
     del images, labels
     
     network_params = config['network']
+    logging.info('Available GPUs:')
+    for i in tf.config.list_physical_devices('GPU'):
+        logging.info(f'    {i}')
+
+#    strategy = tf.distribute.MirroredStrategy(devices=['/GPU:0', '/GPU:1', '/GPU:2', '/GPU:3'])
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
         train_data = np_to_tfdataset(X_train, y_train, batch_size=config['batch_size'])
@@ -78,7 +93,6 @@ def main():
         model = get_model(dimensions, **network_params)
 
     logging.info(model.summary())
-    logging.info(f'{strategy.num_replicas_in_sync}')
     logging.info('Train/Valid split:')
     logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
 

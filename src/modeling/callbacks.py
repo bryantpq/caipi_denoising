@@ -1,15 +1,27 @@
 import logging
 import os
+import socket
 import tensorflow as tf
 from datetime import datetime, date
+
+hostname = socket.gethostname()
+
+if 'titan' in hostname:
+    MODELS_PATH = '/home/quahb/caipi_denoising/models'
+    TENSORBOARD_PATH = '/home/quahb/caipi_denoising/logs/fit'
+elif 'compbio' in hostname:
+    MODELS_PATH = '/common/quahb/caipi_denoising/models'
+    TENSORBOARD_PATH = '/common/quahb/caipi_denoising/logs/fit'
+else:
+    raise ValueError(f'Unknown hostname: {hostname}')
 
 
 def get_training_cb(
         config_name,
         patience=3, 
         model_type=None,
-        save_path='/home/quahb/caipi_denoising/models',
-        tensorboard_path='/home/quahb/caipi_denoising/logs/fit'
+        save_path=MODELS_PATH,
+        tensorboard_path=TENSORBOARD_PATH
     ):
     """
     Return list of callbacks to be used in model.fit(cb=cb)

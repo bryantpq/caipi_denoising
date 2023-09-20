@@ -11,7 +11,7 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    subj_ids = os.listdir(args.input_path)
+    subj_ids = os.listdir(args.input_path)[:5]
 
     for subj in tqdm(subj_ids, ncols=100):
         modalities = os.listdir( os.path.join(args.input_path, subj) )
@@ -42,8 +42,9 @@ def main():
             else:
                 subj_slices = [s.pixel_array for s in subj_slices]
 
-            subj_data = np.stack(subj_slices, axis=0)
-            subj_data = np.moveaxis(subj_data, 0, -1)
+            subj_data = np.stack(subj_slices, axis=0) # (256, 384, 312)
+            subj_data = np.moveaxis(subj_data, 0, -1) # (384, 312, 256)
+            #subj_data = np.transpose(subj_data, axes=[2, 1, 0]) # (312, 384, 256)
 
             nii_path = os.path.join(args.output_path, subj, modality)
             nii_data = nib.Nifti1Image(subj_data, affine=np.eye(4))

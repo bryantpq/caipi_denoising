@@ -168,15 +168,32 @@ def white_noise(data_slices, mu=0.0, sigma=0.2):
 
     return data_slices
 
+def low_pass_filter(img, window_size=64):
+    assert window_size % 2 == 0
+    assert np.iscomplexobj(img)
+    assert img.ndim in [2, 3]
+    
+    mask = np.ones((window_size, ) * img.ndim, dtype=np.csingle)
+
+    pad_len = [ ( (img.shape[i] - mask.shape[i]) // 2, ) * 2 for i in range(img.ndim) ]
+
+    mask = np.pad(mask, pad_len, constant_values=0.0)
+    
+    return np.multiply(mask, img)
+
 def fourier_transform(data, shift=True):
     '''
     Shift comes after the FT to operate on freq space.
     '''
     logging.debug(data.shape)
 
-    data = np.fft.fft2(data, axes=(0, 1))
+    if data.ndim == 2:
+        data = np.fft.fft2(data, axes=(0, 1))
+        if shift: data = np.fft.fftshift(data, axes=(0, 1))
 
-    if shift: data = np.fft.fftshift(data, axes=(0, 1))
+    elif data.ndim == 3:
+        data = np.fft.fftn(data, axes=(0, 1, 2))
+        if shift: data = np.fft.fftshift(data, axes=(0, 1, 2))
 
     return data
 
@@ -186,8 +203,11 @@ def inverse_fourier_transform(data, shift=True):
     '''
     logging.debug(data.shape)
 
-    if shift: data = np.fft.ifftshift(data)
-
-    data = np.fft.ifft2(data)
+    if data.ndim == 2:
+        if shift: data = np.fft.ifftshift(data)
+        data = np.fft.ifft2(data)
+    elif data.ndim == 3:
+        if shift: data = np.fft.ifftshift(data)
+        data = np.fft.ifftn(data, axes=(0, 1, 2))
 
     return data

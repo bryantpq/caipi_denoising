@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def add_center_window(a, window_size=64):
     b = np.copy(a)
     start = int(a.shape[0] / 2 - window_size / 2)
