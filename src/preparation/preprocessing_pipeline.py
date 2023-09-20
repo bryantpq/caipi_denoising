@@ -84,8 +84,10 @@ def normalize(data):
 def pad_square(data, pad_value=0.0):
     logging.debug(data.shape)
 
-    pad_len_0 = (384 - data.shape[0]) // 2
-    pad_len_1 = (384 - data.shape[1]) // 2
+    largest_dim = max(data.shape[0], data.shape[1])
+
+    pad_len_0 = (largest_dim - data.shape[0]) // 2
+    pad_len_1 = (largest_dim - data.shape[1]) // 2
     data = np.pad(
             data, 
             [(pad_len_0, pad_len_0), (pad_len_1, pad_len_1), (0, 0)],
@@ -183,17 +185,14 @@ def low_pass_filter(img, window_size=64):
 
 def fourier_transform(data, shift=True):
     '''
+    Apply 2D FT on first two dimensions of the given 3D volume.
     Shift comes after the FT to operate on freq space.
     '''
+    assert np.iscomplexobj(data)
     logging.debug(data.shape)
 
-    if data.ndim == 2:
-        data = np.fft.fft2(data, axes=(0, 1))
-        if shift: data = np.fft.fftshift(data, axes=(0, 1))
-
-    elif data.ndim == 3:
-        data = np.fft.fftn(data, axes=(0, 1, 2))
-        if shift: data = np.fft.fftshift(data, axes=(0, 1, 2))
+    data = np.fft.fft2(data, axes=(0, 1))
+    if shift: data = np.fft.fftshift(data, axes=(0, 1))
 
     return data
 
@@ -203,11 +202,7 @@ def inverse_fourier_transform(data, shift=True):
     '''
     logging.debug(data.shape)
 
-    if data.ndim == 2:
-        if shift: data = np.fft.ifftshift(data)
-        data = np.fft.ifft2(data)
-    elif data.ndim == 3:
-        if shift: data = np.fft.ifftshift(data)
-        data = np.fft.ifftn(data, axes=(0, 1, 2))
+    if shift: data = np.fft.ifftshift(data)
+    data = np.fft.ifft2(data)
 
     return data
