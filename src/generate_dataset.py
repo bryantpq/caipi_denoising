@@ -15,7 +15,6 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from preparation.data_io import load_raw_niftis, unpack_data_dict, create_folders
-from preparation.extract_patches import extract_patches
 from preparation.preprocessing_pipeline import preprocess_data
 from utils.create_logger import create_logger
 
@@ -79,11 +78,6 @@ def main():
             processed_label = preprocess_data(
                     label, config['preprocessing_params'], config['label_steps'], subj_i=i
             )
-
-            if config['extract_patches']:
-                ep_params = config['extract_patches_params']
-                processed_image = extract_patches(processed_image, config['extract_dimensions'], **ep_params)
-                processed_label = extract_patches(processed_label, config['extract_dimensions'], **ep_params)
 
             image_fname = os.path.join(output_folder, 'images', n)
             label_fname = os.path.join(output_folder, 'labels', n)

@@ -4,28 +4,29 @@ input_folder: '/home/quahb/caipi_denoising/data/niftis/cavsms'
 output_folder: '/home/quahb/caipi_denoising/data/datasets/accelerated/3D_patches_compleximage'
 save_format: 'nifti'
 
-combine_mag_phase: True
+rescale_combine_mag_phase: True
 test_size: 0.0
 split_seed: 42
 logging_level: 'info'
-extract_dimensions: 2
-extract_patches: True
 
-extract_patches_params:
-    patch_size: [256, 256, 256]
-    extract_step: [64, 64, 64]
 image_steps:
     - rescale_magnitude
     - pad_square
     - random_xy_flip
     - white_noise
+    - patchify
 label_steps:
     - rescale_magnitude
     - pad_square
     - random_xy_flip
+    - patchify
 input_steps:
     - pad_square
 preprocessing_params:
+    extract_patches:
+        dimensions: 3
+        patch_size: [256, 256, 256]
+        extract_step: [64, 64, 64]
     normalize:
     pad_square:
         pad_value: 0.0

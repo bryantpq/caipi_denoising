@@ -3,6 +3,9 @@ import numpy as np
 import tensorflow as tf
 import pdb
 
+from patchify import patchify
+
+
 def preprocess_data(data, params, steps, subj_i=None):
     '''
     Given a numpy array of a single subject, preprocess and return it.
@@ -20,6 +23,8 @@ def preprocess_data(data, params, steps, subj_i=None):
         if name == 'random_xy_flip':
             assert subj_i is not None
             pp_data = func(pp_data, subj_i, **params[name])
+        elif name not in params:
+            pp_data = func(pp_data)
         elif params[name] is None:
             pp_data = func(pp_data)
         else:
@@ -35,7 +40,17 @@ def gen_pipeline(steps):
     
     if steps is not None:
         for step in steps:
-            if   step == 'normalize':
+            if step in ['patchify', 'extract_patches']:
+                assert steps[-1] == step # patchify must be last operation
+                pipeline.append( (extract_patches, step) )
+
+            elif step in ['fourier_transform', 'ft']:
+                pipeline.append( (fourier_transform, step) )
+
+            elif step in ['inverse_fourier_transform', 'ift']:
+                pipeline.append( (inverse_fourier_transform, step) )
+
+            elif step == 'normalize':
                 pipeline.append( (normalize, step) )
 
             elif step == 'pad_square':
@@ -53,12 +68,6 @@ def gen_pipeline(steps):
             elif step == 'white_noise':
                 pipeline.append( (white_noise, step) )
 
-            elif step in ['fourier_transform', 'ft']:
-                pipeline.append( (fourier_transform, step) )
-
-            elif step in ['inverse_fourier_transform', 'ift']:
-                pipeline.append( (inverse_fourier_transform, step) )
-
             else:
                 logging.info('Operation {} not supported'.format(step))
     
@@ -67,6 +76,19 @@ def gen_pipeline(steps):
 """
 Preprocessing Operations
 """
+
+def extract_patches(data, dimensions, patch_size, extract_step):
+    assert dimensions == len(extract_step)
+    assert dimensions == len(patch_size)
+
+    logging.debug(data.shape)
+
+    patches = patchify(data, patch_size, step=extract_step)
+    patches = patches.reshape(-1, *patch_size)
+
+    logging.debug(patches.shape)
+
+    return patches
 
 def normalize(data):
     '''
