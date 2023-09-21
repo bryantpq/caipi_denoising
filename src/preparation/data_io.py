@@ -29,19 +29,19 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False):
             raise ValueError(f'Detected bad file extension: {file_ext}')
 
     if dimensions == 2:
-        if data_format == 'full': # use full volumes for training [384, 384, 256]
+        if data_format == 'full': # input dims eg. [384, 384, 256]
             data = [ np.moveaxis(d, -1, 0) for d in data ]
             data = np.vstack(data)
-        elif data_format == 'patches': # use patches for training eg. [1000, 256, 256]
+        elif data_format == 'patches': # input dims eg. [1000, 256, 256]
             data = np.vstack(data)
 
         data = np.expand_dims(data, axis=-1)
-        assert data.ndim == 4, '2D Data for training should be 4 dimensional: [num_samples, dim1, dim2, dim3]'
+        assert data.ndim == 4, '2D Data for training should be 4 dimensional: [num_samples, dim1, dim2, 1]'
 
     elif dimensions == 3:
-        if data_format == 'full': # use full volumes for training [384, 384, 256]
+        if data_format == 'full': # input dims eg. [384, 384, 256]
             data = np.stack(data)
-        elif data_format == 'patches': # use patches for training eg. [9, 256, 256, 256]
+        elif data_format == 'patches': # input dims eg. [9, 256, 256, 256]
             data = np.vstack(data)
 
         data = np.expand_dims(data, axis=-1)
@@ -52,7 +52,7 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False):
     else:
         return data
 
-def load_niftis(load_path, load_modalities, combine_mag_phase=True):
+def load_raw_niftis(load_path, load_modalities, rescale_combine_mag_phase=True):
     '''
     Given a path to a folder of subjects, load given modalities within each subject.
     '''
@@ -73,12 +73,12 @@ def load_niftis(load_path, load_modalities, combine_mag_phase=True):
                     tmp = np.array(nib.load(fp).dataobj)
                     res[subj][lm] = tmp
 
-    if combine_mag_phase:
-        res = _combine_mag_phase(res)
+    if rescale_combine_mag_phase:
+        res = _rescale_combine_mag_phase(res)
 
     return res, len(subj_ids)
 
-def _combine_mag_phase(data_dict, remove_noncomplex=True):
+def _rescale_combine_mag_phase(data_dict, remove_noncomplex=True):
     pbar = tqdm(list(data_dict.keys()), ncols=100, total=len(data_dict.keys()))
     for subj in pbar:
         pbar.set_description(f'Reconstructing complex data for {subj}')

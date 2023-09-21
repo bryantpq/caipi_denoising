@@ -14,7 +14,7 @@ import yaml
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from preparation.data_io import load_niftis, unpack_data_dict, create_folders
+from preparation.data_io import load_raw_niftis, unpack_data_dict, create_folders
 from preparation.extract_patches import extract_patches
 from preparation.preprocessing_pipeline import preprocess_data
 from utils.create_logger import create_logger
@@ -31,7 +31,6 @@ def main():
     logging.info('')
 
     acceleration = config['output_folder'].split('/')[-2]
-    combine_mag_phase = config['combine_mag_phase']
     output_folder = config['output_folder']
     save_format = config['save_format']
     test_size = config['test_size']
@@ -44,10 +43,10 @@ def main():
     elif acceleration == 'accelerated':
         load_modalities = config['accelerated_modalities']
 
-    data_dict, n_subjs = load_niftis(
+    data_dict, n_subjs = load_raw_niftis(
             config['input_folder'], 
             load_modalities, 
-            combine_mag_phase=combine_mag_phase
+            rescale_combine_mag_phase=config['rescale_combine_mag_phase']
     )
 
     assert len(data_dict.keys()) == n_subjs
