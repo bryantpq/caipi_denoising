@@ -14,12 +14,12 @@ image_steps:
     - pad_square
     - random_xy_flip
     - white_noise
-    - patchify
+    - extract_patches
 label_steps:
     - rescale_magnitude
     - pad_square
     - random_xy_flip
-    - patchify
+    - extract_patches
 input_steps:
     - pad_square
 preprocessing_params:

@@ -40,7 +40,7 @@ def gen_pipeline(steps):
     
     if steps is not None:
         for step in steps:
-            if step in ['patchify', 'extract_patches']:
+            if step == 'extract_patches':
                 assert steps[-1] == step # patchify must be last operation
                 pipeline.append( (extract_patches, step) )
 
@@ -77,7 +77,7 @@ def gen_pipeline(steps):
 Preprocessing Operations
 """
 
-def extract_patches(data, dimensions, patch_size, extract_step):
+def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[32,32,32]):
     assert dimensions == len(extract_step)
     assert dimensions == len(patch_size)
 
@@ -222,9 +222,10 @@ def inverse_fourier_transform(data, shift=True):
     '''
     Shift comes before the FT to operate on freq space.
     '''
+    assert np.iscomplexobj(data)
     logging.debug(data.shape)
 
-    if shift: data = np.fft.ifftshift(data)
-    data = np.fft.ifft2(data)
+    if shift: data = np.fft.ifftshift(data, axes=(0, 1))
+    data = np.fft.ifft2(data, axes=(0, 1))
 
     return data

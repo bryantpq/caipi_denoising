@@ -9,9 +9,12 @@ from tqdm import tqdm
 from preparation.preprocessing_pipeline import rescale_magnitude
 
 
-def load_dataset(data_folder, dimensions, data_format, return_names=False):
+def load_dataset(data_folder, dimensions, data_format, return_names=False, subset=None):
     files = sorted(os.listdir(data_folder))
     files = [ f for f in files if os.path.isfile(os.path.join(data_folder, f)) ]
+
+    if subset is not None: # take first n subjects only
+        files = files[:subset]
 
     data = []
     pbar = tqdm(files, ncols=110)
