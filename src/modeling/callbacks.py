@@ -8,7 +8,7 @@ hostname = socket.gethostname()
 if 'titan' in hostname:
     MODELS_PATH = '/home/quahb/caipi_denoising/models'
     TENSORBOARD_PATH = '/home/quahb/caipi_denoising/logs/tensorboard'
-elif hostname in ['compbio', 'hpc']:
+elif 'compbio' in hostname or 'hpc' in hostname:
     MODELS_PATH = '/common/quahb/caipi_denoising/models'
     TENSORBOARD_PATH = '/common/quahb/caipi_denoising/logs/tensorboard'
 else:
