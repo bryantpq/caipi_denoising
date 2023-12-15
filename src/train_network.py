@@ -10,7 +10,7 @@ os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 hostname = socket.gethostname()
 if 'titan' in hostname:
     os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-12.1.105-0'
-elif 'hpc' in hostname:
+elif hostname in ['compbio', 'hpc']:
     os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/home/quahb/.conda/pkgs/cuda-nvcc-11.8.89-0'
 else:
     raise ValueError(f'Unknown hostname: {hostname}')

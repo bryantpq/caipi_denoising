@@ -8,7 +8,7 @@ def create_logger(config_name, logging_level):
     hostname = socket.gethostname()
     if 'titan' in hostname:
         log_folder = '/home/quahb/caipi_denoising/logs'
-    elif 'compbio' in hostname:
+    elif hostname in ['compbio', 'hpc']:
         log_folder = '/common/quahb/caipi_denoising/logs'
     else:
         raise ValueError(f'Unkown hostname: {hostname}')
