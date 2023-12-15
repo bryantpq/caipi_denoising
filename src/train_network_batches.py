@@ -91,13 +91,13 @@ def main():
     # start: network loading
     network_params = config['network']
     model_folder = f"/home/quahb/caipi_denoising/models/{config_name}/"
-    model_name   = f"{network_params['model_type']}" + "_ep{}_bat{}"
+    model_name   = f"{network_params['model_type']}" + "_ep{}_bat{}.h5"
     if epoch == 1 and batch == 1:
         network_params['load_model_path'] = None
     elif epoch != 1 and batch == 1:
         network_params['load_model_path'] = os.path.join(model_folder, model_name.format(epoch - 1, 11))
     elif batch > 1:
-        network_params['load_model_path'] = os.path.join(model_folder, model_name.format(epoch,batch-1))
+        network_params['load_model_path'] = os.path.join(model_folder, model_name.format(epoch, batch-1))
     elif batch == -1: # run validation on final trained model of the epoch
         network_params['load_model_path'] = os.path.join(model_folder, model_name.format(epoch, 11))
     else:
@@ -127,7 +127,7 @@ def main():
         )
         loss = history.history['loss']
         logging.info(loss)
-        log_loss(loss, epoch, batch)
+        log_loss(config_name, loss, epoch, batch)
 
         save_name = os.path.join(model_folder, model_name.format(epoch, batch))
         model.save_weights(save_name)
@@ -137,9 +137,9 @@ def main():
                 data, batch_size=config['batch_size']
         )
         logging.info(loss)
-        log_loss(loss, epoch, batch)
+        log_loss(config_name, loss, epoch, batch)
 
-def log_loss(loss, epoch, batch):
+def log_loss(config_name, loss, epoch, batch):
     today = str(datetime.date.today())
     fname = f'../logs/{config_name}_{today}.txt'
     with open(fname, 'a') as f:
