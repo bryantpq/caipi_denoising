@@ -6,15 +6,32 @@ import os
 import pdb
 from tqdm import tqdm
 
-from preparation.preprocessing_pipeline import rescale_magnitude
+from utils.standardize_nifti import standardize_affine_header
 
+def load_dataset(data_folder, dimensions, data_format, return_names=False, ids=None, batch=None):
+    '''
+    Given a target folder, load the data in the folder and return them as a stacked array
+    params:
+        ids: list - only load subjects in the folder with ids in this list.
+        batch: int/list - determines the number of subjects or the indices of subjects to load.
+    '''
+    assert data_format in ['full', 'patches']
 
-def load_dataset(data_folder, dimensions, data_format, return_names=False, subset=None):
     files = sorted(os.listdir(data_folder))
     files = [ f for f in files if os.path.isfile(os.path.join(data_folder, f)) ]
 
-    if subset is not None: # take first n subjects only
-        files = files[:subset]
+    if ids is not None:
+        files = [ f for subj in ids for f in files if subj in f ]
+
+    if batch is not None:
+        if type(batch) == list and len(batch) == 2:
+            start, stop = batch[0], batch[1]
+            files = files[start:stop]
+        elif type(batch) == int:
+            files = files[:batch]
+
+    logging.info('Loading subjects:')
+    logging.info(files)
 
     data = []
     pbar = tqdm(files, ncols=110)
@@ -48,7 +65,7 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False, subse
             data = np.vstack(data)
 
         data = np.expand_dims(data, axis=-1)
-        assert data.ndim == 5, '3D Data for training should be 5 dimensional: [num_samples, dim1, dim2, dim3, 1]'
+        assert data.ndim == 5, f'3D Data for training should be 5 dimensional: [num_samples, dim1, dim2, dim3, 1]\nGiven shape: {data.shape}'
 
     if return_names:
         return data, files
@@ -103,13 +120,16 @@ def _rescale_combine_mag_phase(data_dict, remove_noncomplex=True):
 
     return data_dict
 
-def magphase2complex(mag, pha):
-    assert mag.shape == pha.shape
+def magphase2complex(mag, pha, rescale=True):
+    from preparation.preprocessing_pipeline import rescale_magnitude
 
-    re_mag = rescale_magnitude(mag, 0, 1)
-    re_pha = rescale_magnitude(pha, -np.pi, np.pi)
+    assert mag.shape == pha.shape, f'mag.shape: {mag.shape}, pha.shape: {pha.shape}'
 
-    complex_image = np.multiply(re_mag, np.exp(1j * re_pha)).astype('complex64')
+    if rescale:
+        mag = rescale_magnitude(mag, 0, 1)
+        pha = rescale_magnitude(pha, -np.pi, np.pi)
+
+    complex_image = np.multiply(mag, np.exp(1j * pha)).astype('complex64')
 
     return complex_image
 
@@ -123,11 +143,15 @@ def unpack_data_dict(data_dict):
 
     return data, names
 
-def write_data(data, filename, save_dtype):
+def write_data(data, filename, save_dtype, save_format='nii'):
     create_folders('/'.join(filename.split('/')[:-1]))
     data = data.astype(save_dtype)
 
-    np.save(filename, data)
+    if 'npy' in save_format:
+        np.save(filename, data)
+    elif 'gz' in save_format:
+        nii_data = standardize_affine_header(data)
+        nib.save(nii_data, filename)
 
 def create_folders(path):
     if not os.path.exists(path):

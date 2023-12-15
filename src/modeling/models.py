@@ -10,7 +10,6 @@ from modeling.softshrink import SSLayer, softshrink
 from modeling.complex_utils import complex_conv2d, complex_conv3d, complex_conv_transpose, complex_conv1d
 from modeling.complex_utils import crelu, zrelu, modrelu, cardioid
 
-
 def dncnn(
         dimensions,
         input_shape, 
@@ -115,7 +114,7 @@ def ddlr(
         input_shape,
         n_features=48,
         window_size=7,
-        n_hidden_layers=22,
+        n_hidden_layers=15,
         kernel_size=3
     ):
 

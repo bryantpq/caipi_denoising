@@ -1,32 +1,33 @@
 unaccelerated_modalities: ['3D_T2STAR_segEPI', '3D_T2STAR_segEPI_pha']
 accelerated_modalities: ['CAIPI1x2', 'CAIPI1x2_pha', 'CAIPI1x3', 'CAIPI1x3_pha', 'CAIPI2x2', 'CAIPI2x2_pha']
 input_folder: '/home/quahb/caipi_denoising/data/niftis/cavsms'
-output_folder: '/home/quahb/caipi_denoising/data/datasets/accelerated/3D_patches_compleximage'
-save_format: 'nifti'
+output_folder: '/home/quahb/caipi_denoising/data/datasets/unaccelerated/base'
 
 rescale_combine_mag_phase: True
 test_size: 0.0
 split_seed: 42
 logging_level: 'info'
+save_format: 'npy'
 
 image_steps:
-    - rescale_magnitude
     - pad_square
+    - threshold_intensities
     - random_xy_flip
     - white_noise
     - extract_patches
 label_steps:
-    - rescale_magnitude
     - pad_square
+    - threshold_intensities
     - random_xy_flip
     - extract_patches
 input_steps:
+    - rescale_magnitude
     - pad_square
 preprocessing_params:
     extract_patches:
-        dimensions: 3
-        patch_size: [256, 256, 256]
-        extract_step: [64, 64, 64]
+        dimensions: 2
+        patch_size: [64, 64]
+        extract_step: [64, 64]
     normalize:
     pad_square:
         pad_value: 0.0

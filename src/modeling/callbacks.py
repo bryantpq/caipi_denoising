@@ -5,16 +5,14 @@ import tensorflow as tf
 from datetime import datetime, date
 
 hostname = socket.gethostname()
-
 if 'titan' in hostname:
     MODELS_PATH = '/home/quahb/caipi_denoising/models'
-    TENSORBOARD_PATH = '/home/quahb/caipi_denoising/logs/fit'
+    TENSORBOARD_PATH = '/home/quahb/caipi_denoising/logs/tensorboard'
 elif 'compbio' in hostname:
     MODELS_PATH = '/common/quahb/caipi_denoising/models'
-    TENSORBOARD_PATH = '/common/quahb/caipi_denoising/logs/fit'
+    TENSORBOARD_PATH = '/common/quahb/caipi_denoising/logs/tensorboard'
 else:
     raise ValueError(f'Unknown hostname: {hostname}')
-
 
 def get_training_cb(
         config_name,

@@ -5,6 +5,8 @@ import pdb
 
 from patchify import patchify
 
+from preparation.data_io import magphase2complex
+
 
 def preprocess_data(data, params, steps, subj_i=None):
     '''
@@ -41,7 +43,7 @@ def gen_pipeline(steps):
     if steps is not None:
         for step in steps:
             if step == 'extract_patches':
-                assert steps[-1] == step # patchify must be last operation
+                assert steps[-1] == step, 'Patchify must be last operation'
                 pipeline.append( (extract_patches, step) )
 
             elif step in ['fourier_transform', 'ft']:
@@ -62,6 +64,9 @@ def gen_pipeline(steps):
             elif step == 'rescale_magnitude':
                 pipeline.append( (rescale_magnitude, step) )
 
+            elif step == 'rescale_complex_frequency':
+                pipeline.append( (rescale_complex_frequency, step) )
+
             elif step == 'threshold_intensities':
                 pipeline.append( (threshold_intensities, step) )
 
@@ -81,10 +86,16 @@ def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[
     assert dimensions == len(extract_step)
     assert dimensions == len(patch_size)
 
-    logging.debug(data.shape)
+    if dimensions == 2:
+        patch_size = patch_size + [1]
+        extract_step = extract_step + [1]
 
+    logging.debug(data.shape)
+    
     patches = patchify(data, patch_size, step=extract_step)
     patches = patches.reshape(-1, *patch_size)
+
+    if dimensions == 2: patches = np.squeeze(patches)
 
     logging.debug(patches.shape)
 
@@ -104,7 +115,8 @@ def normalize(data):
     return data
 
 def pad_square(data, pad_value=0.0):
-    logging.debug(data.shape)
+    logging.debug('Pad square:')
+    logging.debug(f'    Before: {data.shape}')
 
     largest_dim = max(data.shape[0], data.shape[1])
 
@@ -116,13 +128,11 @@ def pad_square(data, pad_value=0.0):
             constant_values=pad_value
         )
     
-    logging.debug(data.shape)
+    logging.debug(f'    After: {data.shape}')
 
     return data
     
 def random_xy_flip(data, subj_i, seed=24, mode='slice'):
-    logging.debug(data.shape)
-
     if mode == 'subject':
         data = tf.image.stateless_random_flip_up_down(data, seed=[subj_i, seed])
         data = tf.image.stateless_random_flip_left_right(data, seed=[subj_i, subj_i * seed])
@@ -137,32 +147,47 @@ def random_xy_flip(data, subj_i, seed=24, mode='slice'):
 
     data = np.array(data)
 
-    logging.debug(data.shape)
-
     return data
 
 def rescale_magnitude(data, t_min=0.0, t_max=1.0):
-    logging.debug(data.shape)
     r_min, r_max = np.min(data), np.max(data)
     num = data - r_min
     den = r_max - r_min
 
     return (num / den) * (t_max - t_min) + t_min
 
+def rescale_complex_frequency(data, abs_min=-1.0, abs_max=1.0):
+    '''
+    Given some data in the frequency domain, compute the absolute value (magnitude) of the data
+    and rescale this to a given range. Then recombine this with the angle value (phase) to create
+    the rescaled complex frequency data.
+    '''
+    assert np.iscomplexobj(data)
+
+    abs_data, ang_data = np.abs(data), np.angle(data)
+    re_abs_data = rescale_magnitude(abs_data, abs_min, abs_max)
+
+    return magphase2complex(re_abs_data, ang_data, rescale=False)
+
 def threshold_intensities(data, value=5000):
     logging.debug(data.shape)
     orig_len = data.shape[-1]
+    logging.debug(f'Slices in threshold_intensities:')
     logging.debug(f'    Before: {orig_len}')
 
     if np.iscomplexobj(data):
         mag_data = np.abs(data)
         sum_intensities = np.array(
-                [ np.sum(mag_data[:,:,i]) for i in range(mag_data.shape[-1]) ])
+                [ np.sum(mag_data[:,:,i]) for i in range(mag_data.shape[-1]) ]
+        )
         data = data[:,:,np.where(sum_intensities > value)]
     else:
-        sum_intensities = np.array([ np.sum(data[:,:,i]) for i in range(data.shape[-1]) ])
+        sum_intensities = np.array(
+                [ np.sum(data[:,:,i]) for i in range(data.shape[-1]) ]
+        )
         data = data[:,:,np.where(sum_intensities > value)]
 
+    logging.debug(list(sum_intensities))
     new_len = data.shape[-1]
     logging.debug(f'    After: {new_len}')
 
@@ -171,7 +196,9 @@ def threshold_intensities(data, value=5000):
     return data
 
 def white_noise(data_slices, mu=0.0, sigma=0.2):
-    logging.debug(data_slices.shape)
+    '''
+    Adds a different level of noise to each slice
+    '''
 
     for slc_i in range(data_slices.shape[-1]):
         data = data_slices[:,:,slc_i]
@@ -188,8 +215,6 @@ def white_noise(data_slices, mu=0.0, sigma=0.2):
             noise_map = np.random.normal(mu, sigma_ * max_, data.shape)
             data_slices[:,:,slc_i] = data + noise_map
 
-    logging.debug(data_slices.shape)
-
     return data_slices
 
 def low_pass_filter(img, window_size=64):
@@ -205,7 +230,7 @@ def low_pass_filter(img, window_size=64):
     
     return np.multiply(mask, img)
 
-def fourier_transform(data, shift=True):
+def fourier_transform(data, axes=(0, 1), shift=True):
     '''
     Apply 2D FT on first two dimensions of the given 3D volume.
     Shift comes after the FT to operate on freq space.
@@ -213,19 +238,19 @@ def fourier_transform(data, shift=True):
     assert np.iscomplexobj(data)
     logging.debug(data.shape)
 
-    data = np.fft.fft2(data, axes=(0, 1))
-    if shift: data = np.fft.fftshift(data, axes=(0, 1))
+    data = np.fft.fft2(data, axes=axes)
+    if shift: data = np.fft.fftshift(data, axes=axes)
 
     return data
 
-def inverse_fourier_transform(data, shift=True):
+def inverse_fourier_transform(data, axes=(0, 1), shift=True):
     '''
     Shift comes before the FT to operate on freq space.
     '''
     assert np.iscomplexobj(data)
     logging.debug(data.shape)
 
-    if shift: data = np.fft.ifftshift(data, axes=(0, 1))
-    data = np.fft.ifft2(data, axes=(0, 1))
+    if shift: data = np.fft.ifftshift(data, axes=axes)
+    data = np.fft.ifft2(data, axes=axes)
 
     return data

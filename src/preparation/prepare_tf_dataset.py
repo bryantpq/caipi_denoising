@@ -11,7 +11,15 @@ def complex_split(data):
     
     return res
 
-def np_to_tfdataset(arr1, arr2=None, batch_size=32):
+def np_to_tfdataset(arr1, arr2=None, batch_size=32, trim_batch=False):
+    if arr2 is not None:
+        assert arr1.shape == arr2.shape, f'Given arrays should have the same shape.'
+
+    if trim_batch:
+        limit = arr1.shape[0] // batch_size * batch_size
+        arr1 = arr1[:limit]
+        if arr2 is not None: arr2 = arr2[:limit]
+
     if arr2 is not None:
         data = tf.data.Dataset.from_tensor_slices((arr1, arr2))
     else:

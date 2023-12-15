@@ -1,3 +1,4 @@
+import datetime
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -268,6 +269,7 @@ class DiffusionModel(keras.Model):
         self.gdf_util = gdf_util
         self.image_embedding = image_embedding
         self.ema = ema
+        self.last_loss = None
 
     def train_step(self, images):
         # 1. Get the batch size
@@ -306,6 +308,8 @@ class DiffusionModel(keras.Model):
         for weight, ema_weight in zip(self.network.weights, self.ema_network.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
 
+        self.last_loss = loss
+
         # 10. Return loss values
         return {"loss": loss}
 
@@ -314,7 +318,6 @@ class DiffusionModel(keras.Model):
         image, 
         denoise_timesteps,
         regularization_image=None,
-        lambduh=0.005, 
         batch_size=8
     ):
         assert image.shape == (384, 384, 256)
@@ -326,8 +329,9 @@ class DiffusionModel(keras.Model):
         image = np.moveaxis(image, -1, 0)
         image = np.expand_dims(image, axis=-1)
 
-        regularization_image = np.moveaxis(regularization_image, -1, 0)
-        regularization_image = np.expand_dims(regularization_image, axis=-1)
+        if regularization_image is not None and self.image_embedding:
+            regularization_image = np.moveaxis(regularization_image, -1, 0)
+            regularization_image = np.expand_dims(regularization_image, axis=-1)
 
         # t is [denoise_timesteps - 1, 0], e.g. 199 - 0
         for t in tqdm(
@@ -339,19 +343,17 @@ class DiffusionModel(keras.Model):
         ):
             tt = tf.cast(tf.fill(image.shape[0], t), dtype=tf.int64) # create vector of shape [256,] with all values set to t
 
-            if self.image_embedding:
+            if regularization_image is not None and self.image_embedding:
                 inputs = [image, tt, regularization_image]
             else:
                 inputs = [image, tt]
+
             pred_noise = self.ema_network.predict(
                 inputs, verbose=0, batch_size=batch_size
             )
             image = self.gdf_util.p_sample(
                 pred_noise, image, tt, clip_denoised=True
             )
-
-#            if regularization_image is not None: 
-#                image = lambduh * regularization_image + (1 - lambduh) * image
 
         image = np.squeeze(image)
         image = np.moveaxis(image, 0, -1)
@@ -363,7 +365,7 @@ class DiffusionModel(keras.Model):
         samples = tf.random.normal(
             shape=(num_images, img_size, img_size, img_channels), dtype=tf.float32
         )
-        # 2. Sample from the model iteratively
+        # 2. Denoise the samples 1000 times
         for t in tqdm(
             reversed(range(0, self.timesteps)), 
             ncols=100, 
@@ -388,32 +390,33 @@ class DiffusionModel(keras.Model):
         self, epoch=None, logs=None, num_rows=2, num_cols=4, figsize=(12, 5)
     ):
         """Utility to plot images using the diffusion model during training."""
-        generated_samples = self.generate_images(num_images=num_rows * num_cols)
-        generated_samples = (
-            tf.clip_by_value(generated_samples * 127.5 + 127.5, 0.0, 255.0)
-            .numpy()
-            .astype(np.uint8)
-        )
+        if epoch % 5 == 0 or epoch < 15:
+            generated_samples = self.generate_images(num_images=num_rows * num_cols)
+            generated_samples = (
+                tf.clip_by_value(generated_samples * 127.5 + 127.5, 0.0, 255.0)
+                .numpy()
+                .astype(np.uint8)
+            )
 
-        fig, ax = plt.subplots(num_rows, num_cols, figsize=figsize)
-        for i, image in enumerate(generated_samples):
-            if num_rows == 1:
-                ax[i].imshow(image, cmap='gray')
-                ax[i].axis("off")
+            fig, ax = plt.subplots(num_rows, num_cols, figsize=figsize)
+            for i, image in enumerate(generated_samples):
+                if num_rows == 1:
+                    ax[i].imshow(image, cmap='gray')
+                    ax[i].axis("off")
+                else:
+                    ax[i // num_cols, i % num_cols].imshow(image, cmap='gray')
+                    ax[i // num_cols, i % num_cols].axis("off")
+
+            if self.image_embedding:
+                path = './diffusion_imgemb_images'
             else:
-                ax[i // num_cols, i % num_cols].imshow(image, cmap='gray')
-                ax[i // num_cols, i % num_cols].axis("off")
+                path = './diffusion_images'
 
-        if self.image_embedding:
-            path = './diffusion_imgemb_images'
-        else:
-            path = './diffusion_images'
+            fig.suptitle(f'Epoch: {epoch}')
+            plt.tight_layout()
+            plt.savefig(os.path.join(path, f"img_ep{epoch}.png"))
+            #plt.show()
 
-        fig.suptitle(f'Epoch: {epoch}')
-        plt.tight_layout()
-        plt.savefig(os.path.join(path, f"imgemb_ep{epoch}.png"))
-        plt.show()
-        
     def save_model(
         self, epoch=None, logs=None
     ):
@@ -422,6 +425,11 @@ class DiffusionModel(keras.Model):
         else:
             path = './diffusion_models'
 
-        if epoch % 10 == 0:
+        if epoch % 5 == 0:
             self.network.save_weights(os.path.join(path, f'diffusion_ep{epoch}.hd5'))
             self.ema_network.save_weights(os.path.join(path, f'ema_diffusion_ep{epoch}.hd5'))
+
+        with open(os.path.join(path, 'loss_values.txt'), 'a') as f:
+            last_loss = self.last_loss
+            now = str(datetime.datetime.now())
+            f.write(f'{now} ep{epoch} {last_loss}\n')

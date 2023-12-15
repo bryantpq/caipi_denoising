@@ -8,6 +8,12 @@ from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import mean_squared_error as sk_mse
 from math import log10, sqrt
 
+# SNR functions
+# snr - unary whole volume SNR
+# axial_psnr - unary axial snr using white matter mask
+# psnr - binary snr using sk_learn
+# my_psnr - binary psnr using mse formula
+
 SUBJ_RESTRICT_RANGE = {
         '1_01_024-V1': (75, 384),
         '1_01_029-V1': (0, 300),
@@ -24,7 +30,10 @@ SUBJ_RESTRICT_RANGE = {
         '1_07_038-V1': (80, 384),
         '1_07_039-V1': (60, 384),
         '1_08_046-V1': (80, 384),
-        '1_08_047-V1': (0, 250)
+        '1_08_047-V1': (0, 250),
+        'CID145': (80, 384),
+        'CID149': (50, 234),
+        'CID191': (0, 234)
         }
 
 def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask, 
@@ -83,7 +92,37 @@ def snr(data, mask=None):
     return mu / sd
 
 # axial_psnr needs slice_snr's before and after denoising
+def volume_psnr(y, mask=None, debug=False, subj_id=None):
+    if mask is not None:
+        cylinder_mask = _create_axial_cylinder_mask()
+        cylinder_mask[np.where(mask == 0)] = 0
+        assert np.array_equal(np.unique(mask), [0, 1]) or \
+               np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
+    
+    wm_brain = np.multiply(y, cylinder_mask)
+    wm_brain = wm_brain[np.where(cylinder_mask == 1)]
+
+    max_int = np.max(wm_brain)
+    std_int = np.std(wm_brain)
+
+    res = max_int / std_int
+
+    if isinstance(res, complex):
+        res = np.abs(res)
+
+    if debug:
+        return res, wm_brain, max_int, std_int
+    else:
+        return res
+
+# axial_psnr needs slice_snr's before and after denoising
 def axial_psnr(y, mask=None, debug=False, subj_id=None):
+    '''
+    Given a data volume and mask for a region of interest (white matter),
+    create a cylinder through the axial plane and calculate the snr for regions
+    intersecting within these 3 volumes. SNR for 2D slices is calculated along the axial plane.
+    Among these 2D SNR calculations, return the highest value.
+    '''
     if mask is not None:
         cylinder_mask = _create_axial_cylinder_mask()
         cylinder_mask[np.where(mask == 0)] = 0
@@ -91,7 +130,7 @@ def axial_psnr(y, mask=None, debug=False, subj_id=None):
                np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
     
     # TODO
-    # fill the indices we dont want with 0's
+    # fill the axial slices with indices we dont want with 0's
     if subj_id in SUBJ_RESTRICT_RANGE:
         START_I, END_I = SUBJ_RESTRICT_RANGE[subj_id]
     else:
@@ -109,6 +148,9 @@ def axial_psnr(y, mask=None, debug=False, subj_id=None):
 
     max_snr_idx = np.argmax(slice_snr)
     max_snr = slice_snr[max_snr_idx]
+
+    if isinstance(max_snr, complex):
+        max_snr = np.log(np.abs(max_snr)) * 10
 
     if debug:
         return max_snr, slice_snr, cylinder_mask
@@ -226,7 +268,7 @@ def my_mse(X, y):
     return total / N
 
 def my_psnr(X, y):
-    MAX_INTENSITY = 1.0
+    MAX_INTENSITY = np.max(X)
     m = my_mse(X, y)
 
     return 10 * math.log10(MAX_INTENSITY / m)

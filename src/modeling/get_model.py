@@ -1,11 +1,14 @@
 import logging
+import numpy as np
 import os
 import tensorflow as tf
 import pdb
 
 from tensorflow.keras import losses
 from tensorflow.keras.models import Model
+
 from modeling.models import dncnn, cdncnn, scnn, ddlr
+from preparation.preprocessing_pipeline import fourier_transform as ft, inverse_fourier_transform as ift
 
 def get_model(
         dimensions,
@@ -63,7 +66,35 @@ def get_loss(loss_function):
 
 
 class ReconMSE(losses.Loss):
+    def __init__(self, beta=1):
+        super().__init__()
+        self.beta = beta
+
     def call(self, y_true, y_pred):
-        return tf.reduce_mean(tf.math.square(y_pred - y_true), axis=-1) +\
-    tf.reduce_mean(tf.math.square(tf.math.abs(y_pred) - tf.math.abs(y_true)), axis=-1) +\
-    tf.reduce_mean(tf.math.square(tf.math.angle(y_pred) - tf.math.angle(y_true)), axis=-1)
+        tmp_true, tmp_pred = tf.identity(y_true), tf.identity(y_pred)
+        tf.print('here')
+        tf.print(tmp_true.shape)
+
+        tmp_true = tf.signal.ifftshift(tmp_true, axes=[1,2])
+        tmp_pred = tf.signal.ifftshift(tmp_pred, axes=[1,2])
+
+        # transpose dims for fft operation
+        # y_true.shape = [None, 384, 384, 1] -> [None, 1, 384, 384]
+        tmp_true = tf.cast(tf.transpose(tmp_true, perm=[0,3,1,2]), tf.complex64)
+        tmp_pred = tf.cast(tf.transpose(tmp_pred, perm=[0,3,1,2]), tf.complex64)
+        tf.print(tmp_true.shape)
+
+        ift_true = tf.signal.ifft2d(tmp_true)
+        ift_pred = tf.signal.ifft2d(tmp_pred)
+        tf.print(ift_true.shape)
+
+        ift_true = tf.transpose(ift_true, perm=[0,2,3,1])
+        ift_pred = tf.transpose(ift_pred, perm=[0,2,3,1])
+        tf.print(ift_true.shape)
+
+        mag_true, mag_pred = tf.math.abs(ift_true), tf.math.abs(ift_pred)
+
+        loss = tf.math.abs(tf.keras.losses.mean_squared_error(y_true, y_pred)) +\
+               self.beta * tf.keras.losses.mean_squared_error(mag_true, mag_pred)
+
+        return loss

@@ -1,6 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pdb
 
+
+def reorient_nifti2npy(data):
+    '''
+    change orientation used in itk snap to be usable in jupyter
+    '''
+    data = np.swapaxes(data, 0, 1)
+    
+    return data
 
 def add_center_window(a, window_size=64):
     b = np.copy(a)
@@ -20,12 +29,26 @@ def center_window_std(a, window_size=64):
     
     return np.std(a[start:end, start:end])
 
-def plot2(a, b, view='axial', slc_i=128, title=[], img_padding=True):
+def plot3multiplanar(img1, img2, ax=None, sg=None, cr=None, itk_offset=False):
+    if itk_offset:
+        ax = ax - 1
+        sg = sg - 1
+        cr = cr - 1
+
+    plot2(img1, img2, slc_i=ax, view='axial')
+    plot2(img1, img2, slc_i=sg, view='sagittal')
+    plot2(img1, img2, slc_i=cr, view='coronal')
+
+def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient=False, vmin=None, vmax=None):
+    if reorient:
+        a = reorient_nifti2npy(a)
+        b = reorient_nifti2npy(b)
+    
     figure, axis = plt.subplots(1, 2, figsize=(20, 14))
     
     a_, b_ = a, b
     
-    if 1 not in a.shape and a.ndim == 3: # check that images are actually 3D
+    if 1 not in a.shape and a.ndim == 3: # check that images are 3D
         if view == 'axial':
             a_, b_ = a_[slc_i,:,:], b_[slc_i,:,:]
         elif view == 'coronal':
@@ -33,9 +56,9 @@ def plot2(a, b, view='axial', slc_i=128, title=[], img_padding=True):
         elif view == 'sagittal':
             a_, b_ = a_[:,:,slc_i], b_[:,:,slc_i]
     
-    axis[0].imshow(a_, cmap='gray')
+    axis[0].imshow(a_, cmap='gray', vmin=vmin, vmax=vmax)
     axis[0].set(xlabel='slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'.format(np.min(a_), np.max(a_), np.mean(a_), np.std(a_)))
-    axis[1].imshow(b_, cmap='gray')
+    axis[1].imshow(b_, cmap='gray', vmin=vmin, vmax=vmax)
     axis[1].set(xlabel='slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'.format(np.min(b_), np.max(b_), np.mean(b_), np.std(b_)))
     
     if type(title) == list and len(title) > 0:
@@ -52,7 +75,7 @@ def plot2(a, b, view='axial', slc_i=128, title=[], img_padding=True):
         plt.tight_layout(pad=0.00)
     
 
-def plot4(a, view='2D', title=[], slc_i=128):
+def plot4(a, view='sagittal', title=None, slc_i=124):
     figure, axis = plt.subplots(1, 4, figsize=(30, 20))
     
     if type(a) is not list:
