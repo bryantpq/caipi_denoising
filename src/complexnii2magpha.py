@@ -23,7 +23,7 @@ def main():
     print('Found {} files at {}'.format(len(files), args.path))
     files = [ os.path.join(args.path, f) for f in files ]
 
-    for f in tqdm(files, ncols=100):
+    for f in tqdm(files, ncols=90):
         print()
         print('Loading file: {}'.format(f))
 

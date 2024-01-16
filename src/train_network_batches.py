@@ -26,8 +26,8 @@ import yaml
 
 from modeling.callbacks import get_training_cb
 from modeling.get_model import get_model
-from preparation.data_io import load_dataset
-from preparation.prepare_tf_dataset import np_to_tfdataset, complex_split
+from preparation.data_io import load_dataset, create_folders
+from preparation.prepare_dataset import np_to_tfdataset, complex_split
 from utils.create_logger import create_logger
 
 
@@ -125,11 +125,12 @@ def main():
                 initial_epoch=epoch - 1,
                 shuffle=True
         )
-        loss = history.history['loss']
+        loss = history.history['loss'][0]
         logging.info(loss)
         log_loss(config_name, loss, epoch, batch)
 
         save_name = os.path.join(model_folder, model_name.format(epoch, batch))
+        create_folders(model_folder)
         model.save_weights(save_name)
         logging.info(f'Saving model:    {save_name}')
     else: # run model performance on validation set
@@ -141,13 +142,13 @@ def main():
 
 def log_loss(config_name, loss, epoch, batch):
     today = str(datetime.date.today())
-    fname = f'../logs/{config_name}_{today}.txt'
+    fname = f'../logs/{config_name}_loss.txt'
     with open(fname, 'a') as f:
         now = str(datetime.datetime.now())
         if batch != -1:
-            f.write(f'{now}:Epoch {epoch}:Batch {batch}:Train Loss {loss}')
+            f.write(f'{now}:Epoch {epoch}:Batch {batch}:Train Loss {loss}\n')
         else:
-            f.write(f'{now}:Epoch {epoch}:Valid Loss {loss}')
+            f.write(f'{now}:Epoch {epoch}:Valid Loss {loss}\n')
 
 def create_parser():
     parser = argparse.ArgumentParser()

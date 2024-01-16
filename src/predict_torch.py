@@ -3,37 +3,33 @@ import logging
 import nibabel as nib
 import numpy as np
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-#os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
 import pdb
-import tensorflow as tf
-from tqdm import tqdm
+import torch
 import yaml
 
 from patchify import patchify, unpatchify
+from torch.utils.data import TensorDataset, DataLoader
+from tqdm import tqdm
 
-from modeling.get_model import get_model
+from modeling.torch_models import get_model
 from preparation.data_io import write_data
-from preparation.prepare_dataset import np_to_tfdataset
 
+FULL_BATCH_SIZE = 8
+PATCH_BATCH_SIZE = 12
 
 def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    if args.dimensions in [2, 3]: input_shape = [None] + args.input_size + [1]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_type = args.model_path.split('/')[-1].split('_')[0]
 
-    network_params = {
-        'dimensions': args.dimensions,
-        'model_type': args.model_type,
-        'input_shape': input_shape,
-        'load_model_path': args.model_path
-    }
-
-    print(f'Creating model {args.model_type}...')
-    strategy = tf.distribute.MirroredStrategy()
-    with strategy.scope():
-        model = get_model(**network_params)
+    print(f'Model {model_type}: {args.model_path}')
+    model = get_model(model_type, args.dimensions)
+    model.load_state_dict(torch.load(args.model_path, map_location='cpu'))
+    model.eval()
+    model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
+    model = model.to(device)
 
     if args.type_dir:
         files_to_load = sorted(os.listdir(args.input_path))
@@ -48,20 +44,22 @@ def main():
                 subj_id = '_'.join(subj_id.split('_')[:-1]) # 1_02_030-V1_CAIPI1x3.npy
                 if subj_id in fold_split['test']: keep.append(f)
             print(f'Running model prediction on subjects from fold-{args.fold}:')
-            print(keep)
+            #print(keep)
             files_to_load = keep
         print(f'Found {len(files_to_load)} files at {args.input_path} to denoise.')
     else:
         files_to_load = [ args.input_path ]
 
-    for cur_file in tqdm(files_to_load, ncols=90):
-        print(f'\nLoading file: {cur_file}...')
+    for cur_file in tqdm(files_to_load, ncols=80):
+        # load data
+        print(f'\nLoading: {cur_file}...')
         fname, fext = os.path.splitext(cur_file)
         if 'gz' in fext:
             data = np.array(nib.load(cur_file).dataobj)
         elif 'npy' in fext:
             data = np.load(cur_file)
 
+        # prediction stage
         if args.extract_patches:
             patch_size, extract_step = args.input_size, args.extract_step
             if args.dimensions == 2:
@@ -76,31 +74,53 @@ def main():
             patches = patches.reshape(-1, *patch_size)
             patches = np.expand_dims(patches, axis=-1) # 3D patches: (n_patches, X, Y, Z, 1)
 
-            patches = np_to_tfdataset(patches)
-            patches = model.predict(
-                    patches,
-                    verbose=1,
-                    batch_size=32
-            )
-            patches = np.squeeze(patches)
+            # convert to torch format
+            patches = np.moveaxis(patches, -1, 1) # [NPATCHES, 1, PATCH_LEN, PATCH_LEN]
+            patches = torch.tensor(patches)
+            patches = TensorDataset(patches)
+            patches_loader = DataLoader(patches, batch_size=PATCH_BATCH_SIZE)
 
-            trim_edges = False
-            if trim_edges: 
-                trim_len = (patch_size[0] - extract_step[0]) // 2
-                patches = trim_patch_edges(patches, trim_len)
-                patches = patches.reshape( (patches.shape[0], ) + (patches.shape[1] - trim_len, ) * 3 )
-            else:
-                patches = patches.reshape(patches_shape)
+            # run prediction
+            patches_out = []
+            for patches_batch in patches_loader:
+                patches_batch = patches_batch[0].to(device)
+                res = model(
+                        patches_batch
+                )
+                res = res.cpu().detach()
+                if res.shape[-1] == 2: res = torch.view_as_complex(res)
+                res = res.numpy()
+                patches_out.append(res)
+            patches_out = np.vstack(patches_out)
+            patches_out = np.moveaxis(patches_out, 1, -1)
+            patches = np.squeeze(patches_out)
+            patches = patches.reshape(patches_shape)
             output = unpatchify(patches, data.shape)
         else:
-            data = np.moveaxis(data, -1, 0)
-            data = np.expand_dims(data, axis=3)
-            data = np_to_tfdataset(data)
-            data = model.predict(
-                    data,
-                    verbose=1,
-                    batch_size=32
-            )
+            # data.shape 384, 384, 256
+            data = np.moveaxis(data, -1, 0) # 256, 384, 384
+            data = np.expand_dims(data, axis=3) # 256, 384, 384, 1
+
+            # convert to torch format
+            data = np.moveaxis(data, -1, 1) # 256, 1, 384, 384
+            data = torch.tensor(data)
+            data = TensorDataset(data)
+            data_loader = DataLoader(data, batch_size=FULL_BATCH_SIZE)
+
+            # run prediction
+            data_out = []
+            for i, data_batch in enumerate(data_loader):
+                data_batch = data_batch[0].to(device)
+                res = model(
+                        data_batch
+                )
+                res = res.cpu().detach()
+                if res.shape[-1] == 2: res = torch.view_as_complex(res)
+                res = res.numpy()
+                data_out.append(res)
+            data = np.vstack(data_out)
+
+            data = np.moveaxis(data, 1, -1)
             data = np.squeeze(data)
             output = np.moveaxis(data, 0, -1)
 
@@ -123,31 +143,14 @@ def main():
             print(f'Saving debug patches {after_patches_name}')
 
         write_data(output, out_name, save_dtype, save_format=fext)
-        print(f'Saving {out_name}')
+        print(f' Saving: {out_name}')
 
     print('Complete!')
-
-def trim_patch_edges(patches, trim_len):
-    if data.ndim == 3:
-        raise NotImplementedError()
-        dims = 2
-    elif data.ndim == 4:
-        dims = 3
-    else:
-        raise ValueError('Oops')
-
-    new_patch_shape = (patches.shape[0], ) + (patches.shape[-1] - trim_len * 2, ) * 3
-    res = np.zeros(new_patch_shape, dtype=np.complex64)
-    res[:, :, :, :] = data[:, trim_len:-trim_len, trim_len:-trim_len, trim_len:-trim_len]
-
-    return res
 
 def create_parser():
     parser = argparse.ArgumentParser()
     example_str = 'python predict.py 2 cdncnn mse --type_dir ../data/datasets/accelerated/msrebs_all_testing/{inputs,outputs} ../models/compleximage_full_cdncnn_2022-12-15/complex_dncnn_ep26.h5 384 384'
     parser.add_argument('dimensions', type=int, choices=[2, 3])
-    parser.add_argument('model_type', choices=['dncnn', 'cdncnn'])
-    parser.add_argument('loss_function', choices=['mae', 'mse', 'recon_mse'])
     parser.add_argument('--type_dir', action='store_true', help='input_path/output_path will be intepreted as dirs')
     parser.add_argument('input_path')
     parser.add_argument('output_path')
@@ -155,7 +158,7 @@ def create_parser():
     parser.add_argument('input_size', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('--extract_patches', action='store_true')
     parser.add_argument('--extract_step', nargs='+', type=int, help='[ length width ]')
-    parser.add_argument('--fold', type=int, choices=[1,2,3,4,5])
+    parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,6])
     parser.add_argument('--debug_patches', action='store_true')
 
     return parser

@@ -8,6 +8,8 @@ from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import mean_squared_error as sk_mse
 from math import log10, sqrt
 
+from preparation.preprocessing_pipeline import rescale_magnitude
+
 # SNR functions
 # snr - unary whole volume SNR
 # axial_psnr - unary axial snr using white matter mask
@@ -87,11 +89,10 @@ def snr(data, mask=None):
         data = data[np.where(mask == 1)]
 
     mu = np.mean(data)
-    sd = np.std(data)
+    sd = np.std(data)**2
 
     return mu / sd
 
-# axial_psnr needs slice_snr's before and after denoising
 def volume_psnr(y, mask=None, debug=False, subj_id=None):
     if mask is not None:
         cylinder_mask = _create_axial_cylinder_mask()
@@ -115,7 +116,6 @@ def volume_psnr(y, mask=None, debug=False, subj_id=None):
     else:
         return res
 
-# axial_psnr needs slice_snr's before and after denoising
 def axial_psnr(y, mask=None, debug=False, subj_id=None):
     '''
     Given a data volume and mask for a region of interest (white matter),
@@ -152,6 +152,8 @@ def axial_psnr(y, mask=None, debug=False, subj_id=None):
     if isinstance(max_snr, complex):
         max_snr = np.log(np.abs(max_snr)) * 10
 
+    max_snr = 10 * math.log10(max_snr)
+
     if debug:
         return max_snr, slice_snr, cylinder_mask
     else:
@@ -169,6 +171,8 @@ def _create_axial_cylinder_mask(rad=0.5, size=(384, 312, 256)):
 
     mask3d = np.zeros(size)
     for i in range(size[0]): mask3d[i] = mask2d
+
+    mask3d = np.swapaxes(mask3d, 0, 1)
 
     return mask3d
 

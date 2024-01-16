@@ -7,8 +7,10 @@ from tensorflow.keras.models import Model
 
 from modeling.DCT import DCTConvLayer, IDCTConvLayer
 from modeling.softshrink import SSLayer, softshrink
-from modeling.complex_utils import complex_conv2d, complex_conv3d, complex_conv_transpose, complex_conv1d
-from modeling.complex_utils import crelu, zrelu, modrelu, cardioid
+from modeling.tf_complex_utils import complex_conv2d, complex_conv3d, complex_conv_transpose, complex_conv1d
+from modeling.tf_complex_utils import crelu, zrelu, modrelu, cardioid
+
+RESIDUAL_LAYER = False
 
 def dncnn(
         dimensions,
@@ -16,7 +18,7 @@ def dncnn(
         n_features=64, 
         n_hidden_layers=15, 
         kernel_size=3,
-        residual_layer=False
+        residual_layer=RESIDUAL_LAYER
     ):
     
     def conv_layer(dimensions, n_features, activation=None):
@@ -47,7 +49,7 @@ def dncnn(
         block = layers.BatchNormalization()(block)
         block = layers.Activation('relu')(block)
 
-    output = conv_layer(dimensions, input_shape[-1], activation='sigmoid')(block)
+    output = conv_layer(dimensions, input_shape[-1])(block)
     
     if residual_layer: output = layers.Add()([in_layer, output])
 
@@ -59,7 +61,7 @@ def cdncnn(
         n_features=128, 
         n_hidden_layers=15,
         kernel_size=3,
-        residual_layer=False
+        residual_layer=RESIDUAL_LAYER
     ):
 
     def conv_layer(dimensions, tf_input, n_features, kernel_size):

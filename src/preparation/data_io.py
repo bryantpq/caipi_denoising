@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from utils.standardize_nifti import standardize_affine_header
 
-def load_dataset(data_folder, dimensions, data_format, return_names=False, ids=None, batch=None):
+def load_dataset(data_folders, dimensions, data_format, return_names=False, ids=None, batch=None, rank=None):
     '''
     Given a target folder, load the data in the folder and return them as a stacked array
     params:
@@ -17,60 +17,77 @@ def load_dataset(data_folder, dimensions, data_format, return_names=False, ids=N
     '''
     assert data_format in ['full', 'patches']
 
-    files = sorted(os.listdir(data_folder))
-    files = [ f for f in files if os.path.isfile(os.path.join(data_folder, f)) ]
+    if type(data_folders) != list: data_folders = [ data_folders ]
 
-    if ids is not None:
-        files = [ f for subj in ids for f in files if subj in f ]
+    res = []
+    for data_folder in data_folders:
+        files = sorted(os.listdir(data_folder))
+        files = [ f for f in files if os.path.isfile(os.path.join(data_folder, f)) ]
 
-    if batch is not None:
-        if type(batch) == list and len(batch) == 2:
-            start, stop = batch[0], batch[1]
-            files = files[start:stop]
-        elif type(batch) == int:
-            files = files[:batch]
+        if ids is not None:
+            filtered = []
+            for subj in ids:
+                for f in files:
+                    fname = f.split('/')[-1]
+                    fsubj = '_'.join(fname.split('_')[:3])
+                    if subj == fsubj:
+                        filtered.append(f)
+                        break
+            files = filtered
 
-    logging.info('Loading subjects:')
-    logging.info(files)
+        if batch is not None:
+            if type(batch) == list and len(batch) == 2:
+                start, stop = batch[0], batch[1]
+                files = files[start:stop]
+            elif type(batch) == int:
+                files = files[:batch]
 
-    data = []
-    pbar = tqdm(files, ncols=110)
-    for f in pbar:
-        pbar.set_description(f'{f}')
+        if rank == 0 or rank is None:
+            logging.info(f'    Loading subjects from {data_folder}')
+            logging.info( '    {}'.format([ f.split('/')[-1] for f in files ]))
 
-        file_ext = '.'.join(f.split('.')[1:])
+        data = []
 
-        fpath = os.path.join(data_folder, f)
-        if file_ext == 'npy':
-            data.append( np.load(fpath) )
-        elif file_ext == 'nii.gz':
-            data.append( np.array(nib.load(fpath).dataobj) )
+        if rank is None: pbar = tqdm(files, ncols=90)
+        else: pbar = files
+
+        for f in pbar:
+            if rank is None: pbar.set_description(f'{f}')
+            file_ext = '.'.join(f.split('.')[1:])
+
+            fpath = os.path.join(data_folder, f)
+            if file_ext == 'npy':
+                data.append( np.load(fpath) )
+            elif file_ext == 'nii.gz':
+                data.append( np.array(nib.load(fpath).dataobj) )
+            else:
+                raise ValueError(f'Detected bad file extension: {file_ext}')
+
+        if dimensions == 2:
+            if data_format == 'full': # input dims eg. [384, 384, 256]
+                data = [ np.moveaxis(d, -1, 0) for d in data ]
+                data = np.vstack(data)
+            elif data_format == 'patches': # input dims eg. [1000, 256, 256]
+                data = np.vstack(data)
+
+            data = np.expand_dims(data, axis=-1)
+            assert data.ndim == 4, '2D Data for training should be 4 dimensional: [num_samples, dim1, dim2, 1]'
+
+        elif dimensions == 3:
+            if data_format == 'full': # input dims eg. [384, 384, 256]
+                data = np.stack(data)
+            elif data_format == 'patches': # input dims eg. [9, 256, 256, 256]
+                data = np.vstack(data)
+
+            data = np.expand_dims(data, axis=-1)
+            assert data.ndim == 5, f'3D Data for training should be 5 dimensional: [num_samples, dim1, dim2, dim3, 1]\nGiven shape: {data.shape}'
+
+        if return_names:
+            res.append( [data, files] )
         else:
-            raise ValueError(f'Detected bad file extension: {file_ext}')
+            res.append(data)
 
-    if dimensions == 2:
-        if data_format == 'full': # input dims eg. [384, 384, 256]
-            data = [ np.moveaxis(d, -1, 0) for d in data ]
-            data = np.vstack(data)
-        elif data_format == 'patches': # input dims eg. [1000, 256, 256]
-            data = np.vstack(data)
-
-        data = np.expand_dims(data, axis=-1)
-        assert data.ndim == 4, '2D Data for training should be 4 dimensional: [num_samples, dim1, dim2, 1]'
-
-    elif dimensions == 3:
-        if data_format == 'full': # input dims eg. [384, 384, 256]
-            data = np.stack(data)
-        elif data_format == 'patches': # input dims eg. [9, 256, 256, 256]
-            data = np.vstack(data)
-
-        data = np.expand_dims(data, axis=-1)
-        assert data.ndim == 5, f'3D Data for training should be 5 dimensional: [num_samples, dim1, dim2, dim3, 1]\nGiven shape: {data.shape}'
-
-    if return_names:
-        return data, files
-    else:
-        return data
+    return (*res, )
 
 def load_raw_niftis(load_path, load_modalities, rescale_combine_mag_phase=True):
     '''
@@ -79,7 +96,7 @@ def load_raw_niftis(load_path, load_modalities, rescale_combine_mag_phase=True):
     res = {}
     subj_ids = sorted(os.listdir(load_path))
 
-    pbar = tqdm(subj_ids, ncols=100)
+    pbar = tqdm(subj_ids, ncols=90)
     for subj in pbar:
         pbar.set_description(f'Loading nifti {subj}')
         files = os.listdir(os.path.join(load_path, subj))
@@ -99,7 +116,7 @@ def load_raw_niftis(load_path, load_modalities, rescale_combine_mag_phase=True):
     return res, len(subj_ids)
 
 def _rescale_combine_mag_phase(data_dict, remove_noncomplex=True):
-    pbar = tqdm(list(data_dict.keys()), ncols=100, total=len(data_dict.keys()))
+    pbar = tqdm(list(data_dict.keys()), ncols=90, total=len(data_dict.keys()))
     for subj in pbar:
         pbar.set_description(f'Reconstructing complex data for {subj}')
         subj_modalities = data_dict[subj].keys()

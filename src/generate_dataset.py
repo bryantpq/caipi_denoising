@@ -66,7 +66,7 @@ def main():
         data, names = unpack_data_dict(train_dict)
         create_folders(os.path.join(output_folder, 'images'))
         create_folders(os.path.join(output_folder, 'labels'))
-        pbar = tqdm(enumerate(zip(data, names)), ncols=100, total=len(names))
+        pbar = tqdm(enumerate(zip(data, names)), ncols=90, total=len(names))
         for i, (d, n) in pbar:
             pbar.set_description(f'Preprocessing {n}')
             image = d
@@ -94,7 +94,7 @@ def main():
         data, names = unpack_data_dict(test_dict)
         create_folders(os.path.join(output_folder, 'inputs'))
         create_folders(os.path.join(output_folder, 'outputs'))
-        pbar = tqdm(zip(data, names), total=len(names), ncols=100)
+        pbar = tqdm(zip(data, names), total=len(names), ncols=90)
         for d, n in pbar:
             pbar.set_description(f'Preprocessing {n}')
             image = d

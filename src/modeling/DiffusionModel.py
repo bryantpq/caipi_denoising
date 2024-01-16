@@ -336,7 +336,7 @@ class DiffusionModel(keras.Model):
         # t is [denoise_timesteps - 1, 0], e.g. 199 - 0
         for t in tqdm(
             reversed(range(0, denoise_timesteps)), 
-            ncols=100, 
+            ncols=90, 
             desc=f'denoising {denoise_timesteps} times',
             bar_format='{l_bar}{bar}{r_bar}',
             total=denoise_timesteps
@@ -368,7 +368,7 @@ class DiffusionModel(keras.Model):
         # 2. Denoise the samples 1000 times
         for t in tqdm(
             reversed(range(0, self.timesteps)), 
-            ncols=100, 
+            ncols=90, 
             desc='generating...', 
             total=self.timesteps
         ):

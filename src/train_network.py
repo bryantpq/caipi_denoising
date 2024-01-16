@@ -24,7 +24,7 @@ import yaml
 from modeling.callbacks import get_training_cb
 from modeling.get_model import get_model
 from preparation.data_io import load_dataset
-from preparation.prepare_tf_dataset import np_to_tfdataset, complex_split
+from preparation.prepare_dataset import np_to_tfdataset, complex_split
 from utils.create_logger import create_logger
 
 
@@ -60,6 +60,13 @@ def main():
         X_valid = load_dataset(images_path, dimensions, data_format, ids=fold_split['valid'])
         y_valid = load_dataset(labels_path, dimensions, data_format, ids=fold_split['valid'])
 
+        MERGE_TRAIN_VAL = False
+        if MERGE_TRAIN_VAL:
+            logging.info('Merging training and validation subjects for train/val split...')
+            X_train, y_train, X_valid, y_valid = merge_datasets(
+                    X_train, y_train, X_valid, y_valid
+            )
+
         train_shuffle = np.random.RandomState(seed=42).permutation(len(X_train))
         valid_shuffle = np.random.RandomState(seed=42).permutation(len(X_valid))
         X_train, y_train = X_train[train_shuffle], y_train[train_shuffle]
@@ -71,8 +78,8 @@ def main():
 
         logging.info(f'Images, Labels dimensions: {images.shape}, {labels.shape}')
 
-        shuffle_i = np.random.RandomState(seed=42).permutation(len(images))
-        images, labels = images[shuffle_i], labels[shuffle_i]
+        shuffle = np.random.RandomState(seed=42).permutation(len(images))
+        images, labels = images[shuffle], labels[shuffle]
 
         TRAIN_SIZE = 0.8
         logging.info(f"Splitting whole dataset into train/validation: {TRAIN_SIZE}/{1 - TRAIN_SIZE}")
@@ -82,10 +89,9 @@ def main():
 
         del images, labels
 
-    if 'compleximage_2d_full' in config_name:
-        logging.info('taking a subset of the full training data or this shit dont work')
-        X_train = X_train[:7000]
-        y_train = y_train[:7000]
+    #if 'compleximage_2d_full' in config_name:
+    #    logging.info('taking a subset of the full training data or this shit dont work')
+    #    X_train, y_train = X_train[:7000], y_train[:7000]
 
     logging.info('Train/Valid split:')
     logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
@@ -95,7 +101,7 @@ def main():
     logging.debug('Available GPUs:')
     for i in tf.config.list_physical_devices('GPU'): logging.debug(f'    {i}')
 
-    batch_size, trim_batch = config['batch_size'], config['trim_batch_end']
+    batch_size, trim_batch = config['batch_size'], False#config['trim_batch_end']
     strategy = tf.distribute.MirroredStrategy(devices=config['gpus'])
     with strategy.scope():
         train_data = np_to_tfdataset(X_train, y_train, batch_size=batch_size, trim_batch=trim_batch)

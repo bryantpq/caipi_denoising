@@ -33,3 +33,18 @@ def np_to_tfdataset(arr1, arr2=None, batch_size=32, trim_batch=False):
     data = data.with_options(options)
 
     return data
+
+def merge_datasets(X_train, y_train, X_valid, y_valid, train_size=0.8):
+    logging.info('Before merge:')
+    logging.info('{}, {}, {}, {}'.format(X_train.shape, y_train.shape, X_valid.shape, y_valid.shape))
+    logging.info('After merge:')
+    
+    images = np.vstack([ X_train, X_valid ])
+    labels = np.vstack([ y_train, y_valid ])
+    shuffle = np.random.RandomState(seed=42).permutation(len(images))
+    images, labels = images[shuffle], labels[shuffle]
+    val_i = int( len(images) * train_size )
+    X_train, y_train = images[:val_i], labels[:val_i]
+    X_valid, y_valid = images[val_i:], labels[val_i:]
+
+    return X_train, y_train, X_valid, y_valid
