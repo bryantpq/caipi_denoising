@@ -134,7 +134,8 @@ def main():
 def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=argparse.FileType('r'))
-    parser.add_argument('--fold', type=int, choices=[1,2,3,4,5])
+    parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,0])
+    parser.add_argument('--dataset_type', default='train', choices=['train', 'overfit_one'])
 
     return parser
 

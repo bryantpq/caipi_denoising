@@ -75,7 +75,7 @@ def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient
         plt.tight_layout(pad=0.00)
     
 
-def plot4(a, view='sagittal', title=None, slc_i=124):
+def plot4(a, view='sagittal', title=None, slc_i=124, reorient=False):
     figure, axis = plt.subplots(1, 4, figsize=(30, 20))
     
     if type(a) is not list:
@@ -106,6 +106,9 @@ def plot4(a, view='sagittal', title=None, slc_i=124):
         axis[3].set(xlabel='slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'.format(np.min(vol), np.max(vol), np.mean(vol), np.std(vol)))
         axis[3].set_title(title)
     else:
+        if reorient:
+            a = [ reorient_nifti2npy(data) for data in a ]
+
         if view == 'axial':
             a[0] = a[0][slc_i,:,:]
             a[1] = a[1][slc_i,:,:]

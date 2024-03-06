@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import logging
 import numpy as np
 import os
@@ -8,7 +9,6 @@ import torch.multiprocessing as mp
 import pdb
 import yaml
 
-from datetime import datetime, date
 from sigfig import round
 from torch.distributed import init_process_group, destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -17,11 +17,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 from modeling.torch_complex_utils import complex_mse
 from modeling.torch_models import get_model
-from preparation.data_io import load_dataset
 from preparation.preprocessing_pipeline import rescale_magnitude
 from utils.create_logger import create_logger
 from utils.torch_train_utils import batch_loss, get_data_gen, train_one_epoch, setup_paths
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 RUN_VALIDATION = False
 
@@ -35,46 +35,63 @@ def main(rank, world_size):
     if args.fold is not None: config_name = config_name + f'_fold{args.fold}'
     if args.subjects is not None: subject_batch_size = args.subjects
 
-    create_logger(config_name, config['logging_level'])
+    create_logger(config_name, args.logging)
 
     if rank == 0:
         logging.info(config)
         logging.info('')
 
-    batch_size = config['batch_size']
+    batch_size  = config['batch_size']
     data_format = config['data_format']
-    dimensions = config['dimensions']
-    network_params = config['network']
+    dimensions  = config['dimensions']
+    init_epoch  = config['init_epoch']
+    n_epochs    = config['n_epochs']
 
-    writer, save_path = setup_paths(config_name)
-    model_save_name = os.path.join(save_path, network_params['model_type'] + '_ep{}.pt')
+    network     = config['network']
+    learning_rate = network['learning_rate']
+    model_type  = network['model_type']
 
-    # start: data loading
-    if rank == 0: logging.info('Loading training dataset from: {}'.format(config['input_folder']))
     images_path = os.path.join(config['input_folder'], 'images')
     labels_path = os.path.join(config['input_folder'], 'labels')
 
-    model = get_model(network_params['model_type'], dimensions).to(rank)
+    tb_writer, save_path = setup_paths(config_name)
+
+    # start: data loading
+    if rank == 0: logging.info(f"Loading {args.dataset_type} dataset from: {config['input_folder']}")
+
+    model = get_model(
+            model_type, 
+            dimensions, 
+            n_hidden_layers=network['n_hidden_layers'],
+            residual_layer=network['residual_layer'],
+            load_model_path=network['load_model_path']
+    )
+    if rank == 0: print(model)
+    model.to(rank)
     model = DDP(model, device_ids=[rank], output_device=rank)
 
     best_vloss = 1000000.
     loss_fn = torch.nn.L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=network_params['learning_rate'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    for epoch in range(config['n_epochs']):
-        if rank == 0: logging.info('********    Epoch {}    ********'.format(epoch + 1))
+    train_start_time = datetime.datetime.now()
+    tb_batch_id = 0
+    for epoch in range(init_epoch, n_epochs):
+        if rank == 0:
+            logging.info('********    Epoch {}    ********'.format(epoch + 1))
+            subj_batch_losses = []
+        epoch_start_time = datetime.datetime.now()
 
         train_gen = get_data_gen(
                 args.fold, images_path, labels_path, dimensions, data_format, 
-                dataset_type='train',
+                dataset_type=args.dataset_type,
                 rank=rank,
                 subject_batch_size=subject_batch_size,
         )
 
         model.train(True)
         for batch_i, (X_train, y_train) in enumerate(train_gen):
-            if rank == 0: logging.info(f'Subject Batch {batch_i} -- X_train, y_train: {X_train.shape}, {y_train.shape}')
-
+            tb_batch_id += 1
             train_set = TensorDataset(X_train, y_train)
 
             train_sampler = DistributedSampler(
@@ -93,19 +110,42 @@ def main(rank, world_size):
                     sampler=train_sampler
             )
 
-            if rank == 0: logging.info('Batch size: {}, Num batches: Train: {}'.format(batch_size, len(train_loader)))
+            if rank == 0: logging.info(f'Subject Batch {batch_i + 1}; Batch size: {batch_size}; Num Batches: {len(train_loader)}; X_train, y_train: {X_train.shape}, {y_train.shape}')
 
-            avg_loss = train_one_epoch(model, loss_fn, optimizer, train_loader, epoch, writer, rank)
+            avg_loss = train_one_epoch(
+                    model, 
+                    loss_fn, 
+                    optimizer, 
+                    train_loader,
+                    epoch,
+                    tb_batch_id,
+                    tb_writer,
+                    rank,
+            )
+
             del train_set, train_sampler, train_loader
 
-            if rank == 0: 
-                logging.info('')
-                logging.info(f'Epoch {epoch}: Completed Subject Batch {batch_i} ...')
+            if rank == 0:
+                logging.info(f'Epoch {epoch + 1}: Completed Subject Batch {batch_i + 1}')
+                subj_batch_losses.append(avg_loss)
 
-        if rank == 0: # calculate vloss and save model
+            # close for-loop training data
+
+        epoch_end_time = datetime.datetime.now()
+        epoch_elapsed_sec = epoch_end_time - epoch_start_time
+        if rank == 0: # log to tensorboard, save model, calculate vloss
+            logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}')
+            epoch_loss = torch.mean(torch.stack(subj_batch_losses))
+            tb_writer.add_scalar('Loss/Epoch Loss', epoch_loss, epoch + 1)
+
+            model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
             save_name = model_save_name.format(epoch + 1)
             logging.info(f'    Saving model {save_name}')
             torch.save(model.module.state_dict(), save_name)
+
+            #if epoch % 10 == 9: # TODO save feature maps as images
+            #    if model_type == 'dcsrn':
+            #        tb_writer.add_images(f'Epoch {epoch} final layer', epoch)
 
             if RUN_VALIDATION:
                 model.eval()
@@ -134,20 +174,27 @@ def main(rank, world_size):
                         running_vloss += vloss
 
                 avg_vloss = running_vloss / (i + 1)
-                logging.info('    Average Loss: Train {}, Valid {}'.format(
-                        round(avg_loss, sigfigs=5), round(avg_vloss.item(), sigfigs=5)))
+                train_loss, valid_loss = round(avg_loss, sigfigs=5), round(avg_vloss.item(), sigfigs=5)
+                logging.info('    Average Loss: Train {}, Valid {}'.format(train_loss, valid_loss))
 
-                writer.add_scalars('Training vs. Validation Loss',
+                tb_writer.add_scalars('Training vs. Validation Loss',
                         { 'Training': avg_loss, 'Validation': avg_vloss }, epoch + 1)
-                writer.flush()
+                tb_writer.flush()
 
                 if avg_vloss < best_vloss:
                     best_vloss = avg_vloss.item()
-                    logging.info('    Valid loss {} better than {}'.format(
-                            round(avg_vloss.item(), sigfigs=5), round(best_vloss, sigfigs=5)))
+                    valid_loss, best_vloss = round(avg_vloss.item(), sigfigs=5), round(best_vloss, sigfigs=5)
+                    logging.info('    Valid loss {} better than {}'.format(valid_loss, best_vloss))
+            # close validation block
+        # close epoch for loop
 
+    total_train_time = epoch_end_time - train_start_time
+    tb_writer.close()
     destroy_process_group()
-    logging.info(f'Training complete for config: {config_name}')
+
+    if rank == 0:
+        logging.info(f'Time taken to train epoch {epoch + 1}: {total_train_time}')
+        logging.info(f'Training complete for config: {config_name}')
 
 def ddp_setup(rank, world_size):
     '''
@@ -163,7 +210,9 @@ def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=argparse.FileType('r'))
     parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,0])
+    parser.add_argument('--dataset_type', default='train', choices=['train', 'overfit_one', 'train_valid', 'test'])
     parser.add_argument('--subjects', type=int, default=4)
+    parser.add_argument('--logging', default='info', choices=['info', 'debug'])
 
     return parser
 

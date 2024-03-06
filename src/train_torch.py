@@ -20,7 +20,7 @@ from modeling.torch_models import get_model
 from preparation.data_io import load_dataset
 from preparation.preprocessing_pipeline import rescale_magnitude
 from utils.create_logger import create_logger
-from utils.torch_train_utils import batch_loss, get_train_data, setup_paths
+from utils.torch_train_utils import batch_loss, get_data_gen, setup_paths
 
 
 def main(rank, world_size):
@@ -50,8 +50,14 @@ def main(rank, world_size):
     images_path = os.path.join(config['input_folder'], 'images')
     labels_path = os.path.join(config['input_folder'], 'labels')
 
-    X_train, y_train, X_valid, y_valid = get_train_data(
-            args.fold, images_path, labels_path, dimensions, data_format
+    X_train, y_train = get_data_gen(
+            args.fold, images_path, labels_path, dimensions, data_format,
+            dataset_type='train'
+    )
+
+    X_valid, y_valid = get_data_gen(
+            args.fold, images_path, labels_path, dimensions, data_format,
+            dataset_type='valid'
     )
 
     logging.info('Train/Valid split:')
@@ -74,12 +80,13 @@ def main(rank, world_size):
             shuffle=False, 
             sampler=train_sampler
     )
-    # validation has no data sampler because we only need to validate on rank 0
-    valid_loader = DataLoader(
-            valid_set,
-            batch_size=batch_size, 
-            shuffle=False, 
-    )
+
+    if rank == 0:
+        valid_loader = DataLoader(
+                valid_set,
+                batch_size=batch_size, 
+                shuffle=False, 
+        )
 
     logging.info('Batch size: {}, Num batches: Train: {}, Valid: {}'.format(batch_size, len(train_loader), len(valid_loader)))
 

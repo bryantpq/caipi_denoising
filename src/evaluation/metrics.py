@@ -1,42 +1,55 @@
+import cv2
 import logging
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import pdb
 
 from skimage.metrics import peak_signal_noise_ratio as sk_psnr
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import mean_squared_error as sk_mse
-from math import log10, sqrt
-
-from preparation.preprocessing_pipeline import rescale_magnitude
-
-# SNR functions
-# snr - unary whole volume SNR
-# axial_psnr - unary axial snr using white matter mask
-# psnr - binary snr using sk_learn
-# my_psnr - binary psnr using mse formula
 
 SUBJ_RESTRICT_RANGE = {
         '1_01_024-V1': (75, 384),
-        '1_01_029-V1': (0, 300),
-        '1_01_040-V1': (100, 384),
+        '1_01_026-V1': (0, 250),
+        '1_01_028-V1': (0, 280),
+        '1_01_029-V1': (100, 300),
+        '1_01_031-V1': (80, 384),
+        '1_01_032-V1': (75, 384),
+        '1_01_037-V1': (75, 384),
+        '1_01_037-V1-2': (75, 384),
+        '1_01_040-V1': (80, 300),
+        '1_01_053-V1': (75, 250), 
+        '1_01_055-V1': (75, 384),
+        '1_01_056-V1': (80, 260),
         '1_07_003-V1': (50, 384),
+        '1_07_004-V1': (50, 310),
         '1_07_005-V1': (50, 260),
         '1_07_009-V1': (50, 200),
         '1_07_010-V1': (0, 200),
-        '1_07_011-V1': (50, 384),
+        '1_07_011-V1': (50, 300),
         '1_07_017-V1': (60, 384),
+        '1_07_021-V1': (0, 290),
         '1_07_022-V1': (60, 384),
         '1_07_025-V1': (70, 384),
         '1_07_028-V1': (70, 384),
         '1_07_038-V1': (80, 384),
-        '1_07_039-V1': (60, 384),
+        '1_07_039-V1': (50, 384),
+        '1_07_047-V1': (50, 300),
+        '1_08_035-V1': (80, 384),
+        '1_08_042-V1': (70, 384),
+        '1_08_044-V1': (70, 310),
+        '1_08_045-V1': (0, 250),
         '1_08_046-V1': (80, 384),
-        '1_08_047-V1': (0, 250),
+        '1_08_047-V1': (80, 384),
+        '1_08_049-V1': (80, 384),
+        '1_08_050-V1': (0, 260),
+        '1_08_071-V1': (0, 260),
+        '1_08_072-V1': (80, 250),
         'CID145': (80, 384),
         'CID149': (50, 234),
         'CID191': (0, 234)
-        }
+}
 
 def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask, 
         brain_mask=None, 
@@ -52,13 +65,13 @@ def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask,
     before_metrics = {}
     after_metrics  = {}
 
-    before_metrics['axial_psnr'] = axial_psnr(before, mask=wm_mask, debug=True, subj_id=subj_id)
+    before_metrics['psnr'] = psnr(before, mask=wm_mask, debug=True, subj_id=subj_id)
     before_metrics['ssim']       = 'N/A' #ssim(reference, before)
     before_metrics['luminance']  = 'N/A' #luminance(reference, before)
     before_metrics['contrast']   = 'N/A' #contrast(reference, before)
     before_metrics['structure']  = 'N/A' #structure(reference, before)
 
-    after_metrics['axial_psnr'] = axial_psnr(after, mask=wm_mask, debug=True, subj_id=subj_id)
+    after_metrics['psnr'] = psnr(after, mask=wm_mask, debug=True, subj_id=subj_id)
     after_metrics['ssim']       = ssim(before, after)
     after_metrics['luminance']  = luminance(before, after)
     after_metrics['contrast']   = contrast(before, after)
@@ -72,13 +85,13 @@ def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask,
 
     return before_metrics, after_metrics
 
-    #before_metrics['mse']        = sk_mse(reference.reshape(-1), before.reshape(-1))
-    #before_metrics['snr']        = snr(before)
+    #before_metrics['mse']       = sk_mse(reference.reshape(-1), before.reshape(-1))
+    #before_metrics['snr']       = snr(before)
     #before_metrics['cnr_vw']    = cnr(before, vein_mask, wm_mask)
     #before_metrics['cnr_lv']    = cnr(before, vein_mask, lesion_mask)
     #before_metrics['cnr_lw']    = cnr(before, wm_mask, lesion_mask)
 
-def snr(data, mask=None):
+def snr(data, mask=None, fn=np.mean):
     '''
     Given an image, compute the SNR for the image.
     If a mask is provided, calculate SNR within the mask.
@@ -86,37 +99,20 @@ def snr(data, mask=None):
     if mask is not None:
         assert np.array_equal(np.unique(mask), [0, 1]) or \
                np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
+        assert data.shape == mask.shape
         data = data[np.where(mask == 1)]
 
-    mu = np.mean(data)
-    sd = np.std(data)**2
+    if len(data) == 0: return np.inf
 
-    return mu / sd
+    mu = fn(data)
+    sd = np.std(data)
 
-def volume_psnr(y, mask=None, debug=False, subj_id=None):
-    if mask is not None:
-        cylinder_mask = _create_axial_cylinder_mask()
-        cylinder_mask[np.where(mask == 0)] = 0
-        assert np.array_equal(np.unique(mask), [0, 1]) or \
-               np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
-    
-    wm_brain = np.multiply(y, cylinder_mask)
-    wm_brain = wm_brain[np.where(cylinder_mask == 1)]
-
-    max_int = np.max(wm_brain)
-    std_int = np.std(wm_brain)
-
-    res = max_int / std_int
-
-    if isinstance(res, complex):
-        res = np.abs(res)
-
-    if debug:
-        return res, wm_brain, max_int, std_int
+    if np.iscomplexobj(data):
+        return np.abs(mu /sd)
     else:
-        return res
+        return mu / sd
 
-def axial_psnr(y, mask=None, debug=False, subj_id=None):
+def psnr(y, mask=None, subj_id=None, acceleration=None):
     '''
     Given a data volume and mask for a region of interest (white matter),
     create a cylinder through the axial plane and calculate the snr for regions
@@ -124,21 +120,18 @@ def axial_psnr(y, mask=None, debug=False, subj_id=None):
     Among these 2D SNR calculations, return the highest value.
     '''
     if mask is not None:
-        cylinder_mask = _create_axial_cylinder_mask()
-        cylinder_mask[np.where(mask == 0)] = 0
         assert np.array_equal(np.unique(mask), [0, 1]) or \
                np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
     
-    # TODO
-    # fill the axial slices with indices we dont want with 0's
     if subj_id in SUBJ_RESTRICT_RANGE:
-        START_I, END_I = SUBJ_RESTRICT_RANGE[subj_id]
+        START, END = SUBJ_RESTRICT_RANGE[subj_id]
     else:
-        START_I, END_I = 0, y.shape[0]
+        START, END = 0, y.shape[0]
 
-    pre_masked_snrs  = np.array([ -1 for i in range(0, START_I) ])
-    post_masked_snrs = np.array([ -1 for i in range(END_I, 384) ])
-    slice_snr = np.array([ snr(y[ii], cylinder_mask[ii]) for ii in range(START_I, END_I) ])
+    pre_masked_snrs  = np.array([ -1 for i in range(0, START) ])
+    post_masked_snrs = np.array([ -1 for i in range(END, 384) ])
+
+    slice_snr = np.array([ snr( y[:,ii,:], mask[:,ii,:], fn=np.max ) for ii in range(START, END) ])
 
     slice_snr = np.append(pre_masked_snrs, slice_snr)
     slice_snr = np.append(slice_snr, post_masked_snrs)
@@ -149,17 +142,62 @@ def axial_psnr(y, mask=None, debug=False, subj_id=None):
     max_snr_idx = np.argmax(slice_snr)
     max_snr = slice_snr[max_snr_idx]
 
-    if isinstance(max_snr, complex):
-        max_snr = np.log(np.abs(max_snr)) * 10
+    max_snr = 20 * math.log10(max_snr)
 
-    max_snr = 10 * math.log10(max_snr)
+    if acceleration == 'CAIPI2x2' and False:
+        plt.plot(range(384), slice_snr)
+        plt.savefig(f'/home/quahb/caipi_denoising/tmp/{subj_id}.png')
 
-    if debug:
-        return max_snr, slice_snr, cylinder_mask
+    return max_snr
+
+def msnr(y, mask=None, subj_id=None):
+    '''
+    sum( {axial slice snr's} ) / Number of axial slices
+    '''
+    if mask is not None:
+        assert np.array_equal(np.unique(mask), [0, 1]) or \
+               np.array_equal(np.unique(mask), [0]), 'Unexpected values for mask'
+    
+    if subj_id in SUBJ_RESTRICT_RANGE:
+        START, END = SUBJ_RESTRICT_RANGE[subj_id]
     else:
-        return max_snr
+        START, END = 0, y.shape[0]
 
-def _create_axial_cylinder_mask(rad=0.5, size=(384, 312, 256)):
+    pre_masked_snrs  = np.array([ -1 for i in range(0, START) ])
+    post_masked_snrs = np.array([ -1 for i in range(END, 384) ])
+
+    slice_snr = np.array([ snr( y[:,ii,:], mask[:,ii,:], fn=np.mean ) for ii in range(START, END) ])
+
+    slice_snr = np.append(pre_masked_snrs, slice_snr)
+    slice_snr = np.append(slice_snr, post_masked_snrs)
+
+    slice_snr[np.isnan(slice_snr)] = 0
+    slice_snr[np.isinf(slice_snr)] = 0
+
+    negative_vals = [s for s in slice_snr if s <=0]
+    slice_snr = [s for s in slice_snr if s > 0]
+    assert len(negative_vals) + len(slice_snr) == 384
+
+    mean_snr = np.sum(slice_snr) / len(slice_snr)
+    mean_snr = 20 * math.log10(mean_snr)
+
+    return mean_snr
+
+def erode_mask(img, kernel_size=5):
+    kernel = (kernel_size, ) * img.ndim
+    kernel = np.ones(kernel, np.uint8)
+    pdb.set_trace()
+    img_erode = cv2.erode(img, kernel, iterations=1)
+
+    return img_erode
+
+def mask_intersect_cylinder(mask):
+    cylinder = create_axial_cylinder_mask()
+    cylinder[np.where(mask == 0)] = 0
+
+    return cylinder
+
+def create_axial_cylinder_mask(rad=0.7, size=(384, 312, 256)):
     xx = np.linspace(-1, 1, size[2])
     yy = np.linspace(-1, 1, size[1])
 
@@ -175,42 +213,6 @@ def _create_axial_cylinder_mask(rad=0.5, size=(384, 312, 256)):
     mask3d = np.swapaxes(mask3d, 0, 1)
 
     return mask3d
-
-def psnr(X, y=None):
-    '''
-    If given two volumes, compute their pairwise psnr
-    if given single volume, compute its psnr using background patches
-    '''
-    if y is not None: 
-        return sk_psnr(X, y)
-
-    patch_len = 25
-
-    if X.ndim == 2:
-        noise_vols = np.array( 
-                [   X[:patch_len, :patch_len], X[-patch_len:, :patch_len],
-                    X[:patch_len, -patch_len:], X[-patch_len:, -patch_len:]
-                ]
-        )
-    elif X.ndim == 3:
-        noise_vols = np.array(
-                [   X[:patch_len,:patch_len,:patch_len], 
-                    X[:patch_len,:patch_len,-patch_len:],
-                    X[:patch_len,-patch_len:,:patch_len],
-                    X[-patch_len:,:patch_len,:patch_len],
-                    X[:patch_len,-patch_len:,-patch_len:],
-                    X[-patch_len:,:patch_len,-patch_len:],
-                    X[-patch_len:,-patch_len:,:patch_len],
-                    X[-patch_len:,-patch_len:,-patch_len:]
-                ]
-        )
-
-    noise_std = np.std(noise_vols.reshape(-1))
-    max_intensity = 1.0
-
-    result = 10 * log10(max_intensity / noise_std)
-
-    return result
 
 def cnr(data, mask1, mask2):
     '''
@@ -276,3 +278,6 @@ def my_psnr(X, y):
     m = my_mse(X, y)
 
     return 10 * math.log10(MAX_INTENSITY / m)
+
+def frangi(data, th=0.01):
+    pass

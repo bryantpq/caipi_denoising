@@ -8,11 +8,11 @@ def complex_mse(output, target):
     #loss = torch.mean((output - target)**2)
     #loss = torch.abs(loss)
 
-    loss = (0.5*(output - target)**2).mean(dtype=torch.complex64)
+    loss = ( 0.5 * (output - target)**2 ).mean(dtype=torch.complex64)
     return torch.abs(loss)
 
 class ComplexConv2d(torch.nn.Module):
-    def __init__(self, in_features, out_features, kernel_size):
+    def __init__(self, in_features, out_features, kernel_size, padding, padding_mode):
         super().__init__()
 
         if in_features  != 1: in_features  = in_features  // 2
@@ -23,28 +23,32 @@ class ComplexConv2d(torch.nn.Module):
                 out_features,
                 (kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.imag_real_conv = torch.nn.Conv2d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.real_imag_conv = torch.nn.Conv2d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.imag_imag_conv = torch.nn.Conv2d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
 
     def forward(self, x):
@@ -62,7 +66,7 @@ class ComplexConv2d(torch.nn.Module):
         return torch_output
 
 class ComplexConv3d(torch.nn.Module):
-    def __init__(self, in_features, out_features, kernel_size):
+    def __init__(self, in_features, out_features, kernel_size, padding, padding_mode):
         super().__init__()
         if in_features  != 1: in_features  = in_features // 2
         if out_features != 1: out_features = out_features // 2
@@ -72,28 +76,32 @@ class ComplexConv3d(torch.nn.Module):
                 out_features,
                 (kernel_size, kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.imag_real_conv = torch.nn.Conv3d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.real_imag_conv = torch.nn.Conv3d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
         self.imag_imag_conv = torch.nn.Conv3d(
                 in_features,
                 out_features,
                 (kernel_size, kernel_size, kernel_size),
                 stride=1,
-                padding='same'
+                padding=padding,
+                padding_mode=padding_mode
         )
 
     def forward(self, x):
@@ -118,6 +126,19 @@ class CReLU(torch.nn.Module):
         real_out, imag_out = torch.real(x), torch.imag(x)
         real_out = torch.nn.ReLU()(real_out)
         imag_out = torch.nn.ReLU()(imag_out)
+
+        torch_output = torch.complex(real_out, imag_out)
+
+        return torch_output
+
+class CGELU(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        real_out, imag_out = torch.real(x), torch.imag(x)
+        real_out = torch.nn.GELU()(real_out)
+        imag_out = torch.nn.GELU()(imag_out)
 
         torch_output = torch.complex(real_out, imag_out)
 

@@ -5,9 +5,6 @@ import pdb
 
 from patchify import patchify
 
-from preparation.data_io import magphase2complex
-
-
 def preprocess_data(data, params, steps, subj_i=None):
     '''
     Given a numpy array of a single subject, preprocess and return it.
@@ -49,8 +46,14 @@ def gen_pipeline(steps):
             elif step in ['fourier_transform', 'ft']:
                 pipeline.append( (fourier_transform, step) )
 
+            elif step in ['get_magnitude', 'magnitude', 'abs', 'absolute']:
+                pipeline.append( (get_magnitude, step) )
+
             elif step in ['inverse_fourier_transform', 'ift']:
                 pipeline.append( (inverse_fourier_transform, step) )
+
+            elif step in ['low_pass_filter', 'low_pass', 'lpf']:
+                pipeline.append( (low_pass_filter, step) )
 
             elif step == 'normalize':
                 pipeline.append( (normalize, step) )
@@ -100,6 +103,17 @@ def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[
     logging.debug(patches.shape)
 
     return patches
+
+def magphase2complex(mag, pha, rescale=True):
+    assert mag.shape == pha.shape, f'mag.shape: {mag.shape}, pha.shape: {pha.shape}'
+
+    if rescale:
+        mag = rescale_magnitude(mag, 0, 1)
+        pha = rescale_magnitude(pha, -np.pi, np.pi)
+
+    complex_image = np.multiply(mag, np.exp(1j * pha)).astype('complex64')
+
+    return complex_image
 
 def normalize(data):
     '''
@@ -171,25 +185,40 @@ def rescale_complex_frequency(data, abs_min=-1.0, abs_max=1.0):
 
 def threshold_intensities(data, value=5000):
     logging.debug(data.shape)
-    orig_len = data.shape[-1]
-    logging.debug(f'Slices in threshold_intensities:')
-    logging.debug(f'    Before: {orig_len}')
+    if data.ndim == 3: # slice mode
+        orig_len = data.shape[-1]
+        logging.debug(f'Slices in threshold_intensities:')
+        logging.debug(f'    Before: {orig_len}')
 
-    if np.iscomplexobj(data):
-        mag_data = np.abs(data)
-        sum_intensities = np.array(
-                [ np.sum(mag_data[:,:,i]) for i in range(mag_data.shape[-1]) ]
-        )
-        data = data[:,:,np.where(sum_intensities > value)]
-    else:
-        sum_intensities = np.array(
-                [ np.sum(data[:,:,i]) for i in range(data.shape[-1]) ]
-        )
+        if np.iscomplexobj(data):
+            mag_data = np.abs(data)
+            sum_intensities = np.array(
+                    [ np.sum(mag_data[:,:,i]) for i in range(mag_data.shape[-1]) ]
+            )
+        else:
+            sum_intensities = np.array(
+                    [ np.sum(data[:,:,i]) for i in range(data.shape[-1]) ]
+            )
         data = data[:,:,np.where(sum_intensities > value)]
 
-    logging.debug(list(sum_intensities))
-    new_len = data.shape[-1]
-    logging.debug(f'    After: {new_len}')
+        logging.debug(list(sum_intensities))
+        new_len = data.shape[-1]
+        logging.debug(f'    After: {new_len}')
+    elif data.ndim == 4: # patch mode
+        orig_patches = data.shape[0]
+        logging.debug(f'Patches in threshold_intensities:')
+        logging.debug(f'    Before: {orig_patches}')
+
+        if np.iscomplexobj(data):
+            mag_data = np.abs(data)
+            sum_intensities = np.array([ np.sum(patch) for patch in mag_data ])
+        else:
+            sum_intensities = np.array([ np.sum(patch) for patch in data ])
+        data = data[np.where(sum_intensities > value)]
+
+        logging.debug(list(sum_intensities))
+        new_len = data.shape[0]
+        logging.debug(f'    After: {new_len}')
 
     data = np.squeeze(data)
 
@@ -217,33 +246,52 @@ def white_noise(data_slices, mu=0.0, sigma=0.2):
 
     return data_slices
 
-def low_pass_filter(img, window_size=64):
-    assert window_size % 2 == 0
+def low_pass_filter(img, window_size=[280,280,184]):
     assert np.iscomplexobj(img)
-    assert img.ndim in [2, 3]
     
-    mask = np.ones((window_size, ) * img.ndim, dtype=np.csingle)
+    if type(window_size) == int: 
+        window_size = [window_size, window_size, window_size]
+    if type(window_size) == list:
+        if window_size[0] < 1: # pick random values
+            pct = np.random.choice(window_size)
+            window_size = [pct * img.shape[0], pct * img.shape[1], pct * img.shape[2]]
+            # remove odd numbers
+            for i in range(len(window_size)): 
+                window_size[i] = int(window_size[i])
+                if window_size[i] % 2 == 1:
+                    window_size[i] += 1
 
+    img = fourier_transform(img)
+
+    # create mask of 1's and 0's to multiply with img
+    mask = np.ones(window_size, dtype=np.csingle)
     pad_len = [ ( (img.shape[i] - mask.shape[i]) // 2, ) * 2 for i in range(img.ndim) ]
-
     mask = np.pad(mask, pad_len, constant_values=0.0)
     
-    return np.multiply(mask, img)
+    img = np.multiply(mask, img)
+    img = inverse_fourier_transform(img)
 
-def fourier_transform(data, axes=(0, 1), shift=True):
+    return img
+
+def get_magnitude(img):
+    assert np.iscomplexobj(img)
+
+    return np.abs(img)
+
+def fourier_transform(data, axes=(0, 1, 2), shift=True):
     '''
-    Apply 2D FT on first two dimensions of the given 3D volume.
+    Apply FT on given dimensions of the given 3D volume.
     Shift comes after the FT to operate on freq space.
     '''
     assert np.iscomplexobj(data)
     logging.debug(data.shape)
 
-    data = np.fft.fft2(data, axes=axes)
+    data = np.fft.fftn(data, axes=axes)
     if shift: data = np.fft.fftshift(data, axes=axes)
 
     return data
 
-def inverse_fourier_transform(data, axes=(0, 1), shift=True):
+def inverse_fourier_transform(data, axes=(0, 1, 2), shift=True):
     '''
     Shift comes before the FT to operate on freq space.
     '''
@@ -251,6 +299,6 @@ def inverse_fourier_transform(data, axes=(0, 1), shift=True):
     logging.debug(data.shape)
 
     if shift: data = np.fft.ifftshift(data, axes=axes)
-    data = np.fft.ifft2(data, axes=axes)
+    data = np.fft.ifftn(data, axes=axes)
 
     return data

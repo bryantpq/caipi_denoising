@@ -271,6 +271,9 @@ class DiffusionModel(keras.Model):
         self.ema = ema
         self.last_loss = None
 
+    def variable_noise(self, shape, partitions, dtype):
+        pass
+
     def train_step(self, images):
         # 1. Get the batch size
         batch_size = tf.shape(images)[0]
@@ -318,7 +321,7 @@ class DiffusionModel(keras.Model):
         image, 
         denoise_timesteps,
         regularization_image=None,
-        batch_size=8
+        batch_size=8,
     ):
         assert image.shape == (384, 384, 256)
 

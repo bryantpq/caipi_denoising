@@ -38,9 +38,9 @@ def main():
     assert save_format in ['npy', 'python', 'numpy', 'nifti', 'nii']
 
     if acceleration == 'unaccelerated':
-        load_modalities = config['unaccelerated_modalities']
+        load_modalities = config['train_modalities']
     elif acceleration == 'accelerated':
-        load_modalities = config['accelerated_modalities']
+        load_modalities = config['test_modalities']
 
     data_dict, n_subjs = load_raw_niftis(
             config['input_folder'], 
@@ -67,9 +67,8 @@ def main():
         create_folders(os.path.join(output_folder, 'images'))
         create_folders(os.path.join(output_folder, 'labels'))
         pbar = tqdm(enumerate(zip(data, names)), ncols=90, total=len(names))
-        for i, (d, n) in pbar:
+        for i, (image, n) in pbar:
             pbar.set_description(f'Preprocessing {n}')
-            image = d
             label = np.copy(image)
 
             processed_image = preprocess_data(
@@ -81,6 +80,14 @@ def main():
 
             image_fname = os.path.join(output_folder, 'images', n)
             label_fname = os.path.join(output_folder, 'labels', n)
+
+            if np.iscomplexobj(processed_image):
+                processed_image = processed_image.astype('complex64')
+                processed_label = processed_label.astype('complex64')
+            else:
+                processed_image = processed_image.astype('float32')
+                processed_label = processed_label.astype('float32')
+
             if save_format in ['npy', 'numpy', 'python']:
                 np.save(image_fname, processed_image)
                 np.save(label_fname, processed_label)
@@ -104,6 +111,12 @@ def main():
             )
 
             input_fname = os.path.join(config['output_folder'], 'inputs', n) 
+
+            if np.iscomplexobj(processed_input):
+                processed_input = processed_input.astype('complex64')
+            else:
+                processed_input = processed_input.astype('float32')
+
             if save_format in ['npy', 'numpy', 'python']:
                 np.save(input_fname, processed_input)
             elif save_format in ['nii', 'nifti']:

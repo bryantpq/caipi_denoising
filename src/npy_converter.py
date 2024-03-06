@@ -53,10 +53,11 @@ def main():
 
         if args.postprocess:
             if args.study == 'cavsms':
-                data = np.swapaxes(data, 0, 1)
+                #data = np.swapaxes(data, 0, 1)
+                #data = data[36:384-36,:,:]
+                #data = np.moveaxis(data, -1, 0)
+                #data = np.flip(data, axis=[0,1,2])
                 data = data[36:384-36,:,:]
-                data = np.moveaxis(data, -1, 0)
-                data = np.flip(data, axis=[0,1,2])
             elif args.study == 'msrebs':
                 data = data[12:384-12,:,:]
 

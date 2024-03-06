@@ -6,6 +6,7 @@ import os
 import pdb
 from tqdm import tqdm
 
+from preparation.preprocessing_pipeline import magphase2complex
 from utils.standardize_nifti import standardize_affine_header
 
 def load_dataset(data_folders, dimensions, data_format, return_names=False, ids=None, batch=None, rank=None):
@@ -43,7 +44,7 @@ def load_dataset(data_folders, dimensions, data_format, return_names=False, ids=
                 files = files[:batch]
 
         if rank == 0 or rank is None:
-            logging.info(f'    Loading subjects from {data_folder}')
+            logging.info(f'    Loading {len(files)} subjects from {data_folder}')
             logging.info( '    {}'.format([ f.split('/')[-1] for f in files ]))
 
         data = []
@@ -136,19 +137,6 @@ def _rescale_combine_mag_phase(data_dict, remove_noncomplex=True):
                     del data_dict[subj][sm]
 
     return data_dict
-
-def magphase2complex(mag, pha, rescale=True):
-    from preparation.preprocessing_pipeline import rescale_magnitude
-
-    assert mag.shape == pha.shape, f'mag.shape: {mag.shape}, pha.shape: {pha.shape}'
-
-    if rescale:
-        mag = rescale_magnitude(mag, 0, 1)
-        pha = rescale_magnitude(pha, -np.pi, np.pi)
-
-    complex_image = np.multiply(mag, np.exp(1j * pha)).astype('complex64')
-
-    return complex_image
 
 def unpack_data_dict(data_dict):
     data, names = [], []
