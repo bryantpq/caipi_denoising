@@ -44,11 +44,8 @@ def main(rank, world_size):
     batch_size  = config['batch_size']
     data_format = config['data_format']
     dimensions  = config['dimensions']
-    init_epoch  = config['init_epoch']
     n_epochs    = config['n_epochs']
-
     network     = config['network']
-    learning_rate = network['learning_rate']
     model_type  = network['model_type']
 
     images_path = os.path.join(config['input_folder'], 'images')
@@ -72,10 +69,19 @@ def main(rank, world_size):
 
     best_vloss = 1000000.
     loss_fn = torch.nn.L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     train_start_time = datetime.datetime.now()
-    tb_batch_id = 0
+
+    if config['load_train_state'] is not None:
+        checkpoint = torch.load(config['load_train_state'])
+        init_epoch  = checkpoint['epoch']
+        tb_batch_id = checkpoint['tb_batch_id']
+        optimizer = checkpoint['optimizer']
+    else:
+        init_epoch = 0
+        tb_batch_id = 0
+        optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
+
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
             logging.info('********    Epoch {}    ********'.format(epoch + 1))
@@ -131,6 +137,7 @@ def main(rank, world_size):
 
             # close for-loop training data
 
+        #scheduler.step()
         epoch_end_time = datetime.datetime.now()
         epoch_elapsed_sec = epoch_end_time - epoch_start_time
         if rank == 0: # log to tensorboard, save model, calculate vloss
@@ -139,9 +146,16 @@ def main(rank, world_size):
             tb_writer.add_scalar('Loss/Epoch Loss', epoch_loss, epoch + 1)
 
             model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
-            save_name = model_save_name.format(epoch + 1)
-            logging.info(f'    Saving model {save_name}')
-            torch.save(model.module.state_dict(), save_name)
+            model_save_name = model_save_name.format(epoch + 1)
+            torch.save(model.module.state_dict(), model_save_name)
+            state_save_name = os.path.join(save_path, 'ckpt_ep{}.pth'.format(epoch + 1)
+            train_state = {
+                    'epoch': epoch + 1,
+                    'tb_batch_id': tb_batch_id,
+                    'optimizer': optimizer,
+            }
+            torch.save(train_state, state_save_name)
+            logging.info(f'    Saving model {model_save_name}')
 
             #if epoch % 10 == 9: # TODO save feature maps as images
             #    if model_type == 'dcsrn':

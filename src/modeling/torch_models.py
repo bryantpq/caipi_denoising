@@ -20,9 +20,9 @@ def get_model(model_type, dimensions, n_hidden_layers=None, residual_layer=None,
     elif model_type == 'fsrcnn':
         model = FSRCNN(dimensions, 56, 12, 4)
     elif model_type == 'dcsrn':
-        model = DCSRN(dimensions, fn='relu', residual_layer=residual_layer)
-    elif model_type == 'dcsrn_new':
-        model = DCSRN_new(dimensions, act_fn='relu')
+        model = DCSRN(dimensions, fn='relu')
+    elif model_type == 'my_dcsrn':
+        model = myDCSRN(dimensions, fn='relu', residual_layer=residual_layer)
 
     if load_model_path is not None:
         logging.info(f'Loading {model_type}: {load_model_path}')
@@ -167,7 +167,7 @@ class FSRCNN(nn.Module):
 
         return x
 
-class DCSRN(nn.Module):
+class myDCSRN(nn.Module):
     def conv_layer(self, in_features, out_features):
         if self.dimensions == 2:
             return nn.Conv2d(
@@ -251,7 +251,7 @@ class DCSRN(nn.Module):
 
         return c6
 
-class DCSRN_new(nn.Module):
+class DCSRN(nn.Module):
     def conv_layer(self, in_features, out_features):
         if self.dimensions == 2:
             return nn.Conv2d(
