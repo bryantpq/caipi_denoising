@@ -16,7 +16,7 @@ from modeling.torch_models import get_model
 from preparation.data_io import write_data
 
 FULL_BATCH_SIZE = 8
-PATCH_BATCH_SIZE = 8 # 4 lowest
+PATCH_BATCH_SIZE = 8
 N_HIDDEN_LAYERS = 12
 RESIDUAL_LAYER  = True
 

@@ -81,9 +81,9 @@ def get_data_gen(
     if type(subject_batch_size) == int and subject_batch_size > 0:
         n_full_batches = n_subjects // subject_batch_size
         batch_indices = []
-        for batch_i in range(1, n_full_batches):
-            start = batch_i * subject_batch_size - subject_batch_size
-            stop  = batch_i * subject_batch_size
+        for batch_i in range(n_full_batches):
+            start = batch_i * subject_batch_size
+            stop  = batch_i * subject_batch_size + subject_batch_size
             batch_indices.append( [start, stop] )
 
         last_n = n_subjects % subject_batch_size
@@ -93,6 +93,8 @@ def get_data_gen(
             batch_indices.append( [start, stop] )
     else:
         batch_indices = [ None ]
+
+    assert batch_indices[-1][-1] == n_subjects
 
     for i, batch_i in enumerate(batch_indices):
         if fold is not None:

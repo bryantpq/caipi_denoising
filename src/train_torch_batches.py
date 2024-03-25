@@ -71,16 +71,20 @@ def main(rank, world_size):
     loss_fn = torch.nn.L1Loss()
 
     train_start_time = datetime.datetime.now()
+    optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
+    scheduler = torch.optim.ExponentialLR(optimizer, gamma=0.9)
 
     if config['load_train_state'] is not None:
+        logging.info(f'Loading previous train state: {config["load_train_state"]}')
         checkpoint = torch.load(config['load_train_state'])
+
         init_epoch  = checkpoint['epoch']
         tb_batch_id = checkpoint['tb_batch_id']
-        optimizer = checkpoint['optimizer']
+        optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
+        scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
     else:
         init_epoch = 0
         tb_batch_id = 0
-        optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
 
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
@@ -148,14 +152,17 @@ def main(rank, world_size):
             model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
             model_save_name = model_save_name.format(epoch + 1)
             torch.save(model.module.state_dict(), model_save_name)
-            state_save_name = os.path.join(save_path, 'ckpt_ep{}.pth'.format(epoch + 1)
+
+            state_save_name = os.path.join(save_path, 'ckpt_ep{}.pth'.format(epoch + 1))
             train_state = {
                     'epoch': epoch + 1,
                     'tb_batch_id': tb_batch_id,
-                    'optimizer': optimizer,
+                    'optimizer': optimizer.state_dict(),
+                    'scheduler': scheduler.state_dict(),
             }
             torch.save(train_state, state_save_name)
             logging.info(f'    Saving model {model_save_name}')
+            logging.info(f'    Saving train state {state_save_name}')
 
             #if epoch % 10 == 9: # TODO save feature maps as images
             #    if model_type == 'dcsrn':
