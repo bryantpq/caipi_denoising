@@ -39,7 +39,7 @@ def plot3multiplanar(img1, img2, ax=None, sg=None, cr=None, itk_offset=False):
     plot2(img1, img2, slc_i=sg, view='sagittal')
     plot2(img1, img2, slc_i=cr, view='coronal')
 
-def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient=False, vmin=None, vmax=None):
+def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient=True, vmin=None, vmax=None):
     if reorient:
         a = reorient_nifti2npy(a)
         b = reorient_nifti2npy(b)

@@ -72,7 +72,7 @@ def main(rank, world_size):
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
-    scheduler = torch.optim.ExponentialLR(optimizer, gamma=0.9)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9, verbose=True)
 
     if config['load_train_state'] is not None:
         logging.info(f'Loading previous train state: {config["load_train_state"]}')
@@ -141,7 +141,7 @@ def main(rank, world_size):
 
             # close for-loop training data
 
-        #scheduler.step()
+        scheduler.step()
         epoch_end_time = datetime.datetime.now()
         epoch_elapsed_sec = epoch_end_time - epoch_start_time
         if rank == 0: # log to tensorboard, save model, calculate vloss

@@ -31,7 +31,8 @@ def load_dataset(data_folders, dimensions, data_format, return_names=False, ids=
                 for f in files:
                     fname = f.split('/')[-1]
                     fsubj = '_'.join(fname.split('_')[:3])
-                    if subj == fsubj:
+                    fsubj_acc = fname.split('.')[0]
+                    if subj == fsubj or subj == fsubj_acc:
                         filtered.append(f)
                         break
             files = filtered

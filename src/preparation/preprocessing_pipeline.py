@@ -1,3 +1,5 @@
+import bm3d
+import cv2
 import logging
 import numpy as np
 import tensorflow as tf
@@ -43,6 +45,9 @@ def gen_pipeline(steps):
                 assert steps[-1] == step, 'Patchify must be last operation'
                 pipeline.append( (extract_patches, step) )
 
+            elif step == 'denoise':
+                pipeline.append( (denoise, step) )
+
             elif step in ['fourier_transform', 'ft']:
                 pipeline.append( (fourier_transform, step) )
 
@@ -84,6 +89,42 @@ def gen_pipeline(steps):
 """
 Preprocessing Operations
 """
+def denoise(
+        data,
+        method, 
+        sigma_psd=0.03, 
+        h=6.5, templateWindowSize=7, searchWindowSize=21,
+    ):
+    '''
+    sigma_psd: noise standard deviation
+    stage_arg: Determines whether to perform hard-thresholding or Wiener filtering.
+    stage_arg = BM3DStages.HARD_THRESHOLDING or BM3DStages.ALL_STAGES (slow but powerful)
+    All stages performs both hard thresholding and Wiener filtering. 
+    h: Parameter regulating filter strength. Big h value perfectly removes noise but also removes 
+        image details, smaller h value preserves details but also preserves some noise.
+    templateWindowSize: Size in pixels of the template patch that is used to compute weights. Should be odd.
+    searchWindowSize: Size in pixels of the window that is used to compute weighted average for given pixel. 
+        Should be odd. Affect performance linearly: greater searchWindowsSize - greater denoising time.
+    '''
+    if method == 'bm3d':
+        denoised = bm3d.bm3d(
+                data,
+                sigma_psd=sigma_psd,
+                stage_arg=bm3d.BM3DStages.ALL_STAGES
+        )
+
+    elif method in ['nl', 'nonlocal', 'nonlocalmeans']:
+        denoised = np.zeros(data.shape, dtype=data.dtype)
+        for ii in range(data.shape[2]):
+            denoised[:,:,ii] = cv2.fastNlMeansDenoising(
+                    data[:,:,ii],
+                    None,
+                    h=h,
+                    templateWindowSize=templateWindowSize,
+                    searchWindowSize=searchWindowSize
+            )
+
+    return denoised
 
 def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[32,32,32]):
     assert dimensions == len(extract_step)
