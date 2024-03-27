@@ -95,6 +95,7 @@ def get_data_gen(
         batch_indices = [ None ]
 
     assert batch_indices[-1][-1] == n_subjects
+    if rank == 0: logging.info(f'Splitting {n_subjects}-subjects into {len(batch_indices)}-batches...')
 
     for i, batch_i in enumerate(batch_indices):
         if fold is not None:

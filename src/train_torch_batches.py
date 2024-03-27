@@ -19,7 +19,7 @@ from modeling.torch_complex_utils import complex_mse
 from modeling.torch_models import get_model
 from preparation.preprocessing_pipeline import rescale_magnitude
 from utils.create_logger import create_logger
-from utils.torch_train_utils import batch_loss, get_data_gen, train_one_epoch, setup_paths
+from utils.train_torch_utils import batch_loss, get_data_gen, train_one_epoch, setup_paths
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
@@ -72,7 +72,7 @@ def main(rank, world_size):
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
     if config['load_train_state'] is not None:
         logging.info(f'Loading previous train state: {config["load_train_state"]}')
@@ -88,7 +88,8 @@ def main(rank, world_size):
 
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
-            logging.info('********    Epoch {}    ********'.format(epoch + 1))
+            logging.info('********    Epoch {}/{}    ********'.format(epoch + 1, n_epochs))
+            logging.info('Learning rate: {}'.format(scheduler.get_last_lr()[0]))
             subj_batch_losses = []
         epoch_start_time = datetime.datetime.now()
 
@@ -232,7 +233,7 @@ def create_parser():
     parser.add_argument('config', type=argparse.FileType('r'))
     parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,0])
     parser.add_argument('--dataset_type', default='train', choices=['train', 'overfit_one', 'train_valid', 'test'])
-    parser.add_argument('--subjects', type=int, default=4)
+    parser.add_argument('--subjects', type=int, default=1)
     parser.add_argument('--logging', default='info', choices=['info', 'debug'])
 
     return parser
