@@ -80,8 +80,8 @@ def main(rank, world_size):
 
         init_epoch  = checkpoint['epoch']
         tb_batch_id = checkpoint['tb_batch_id']
-        optimizer.load_state_dict(checkpoint['optimizer'].state_dict())
-        scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
     else:
         init_epoch = 0
         tb_batch_id = 0
