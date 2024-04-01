@@ -24,12 +24,15 @@ def batch_loss(model, images, labels, loss_fn, rank):
 
     return loss
 
-def setup_paths(config_name):
-    TB_PATH = '/home/quahb/caipi_denoising/logs/tensorboard/{}_{}/'
-    writer = SummaryWriter(TB_PATH.format(config_name, date.today()))
+def setup_paths(config_name, load_train_state):
+    if load_train_state is None:
+        out_folder = '{}_{}'.format(config_name, date.today())
+    else:
+        loaded_folder = load_train_state.split('/')[-2]
+        out_folder = '{}'.format(loaded_folder)
 
-    save_path = os.path.join('/home/quahb/caipi_denoising/models/', 
-            '{}_{}'.format(config_name, str(date.today())))
+    writer = SummaryWriter('/home/quahb/caipi_denoising/logs/tensorboard/{}/'.format(out_folder))
+    save_path = os.path.join('/home/quahb/caipi_denoising/models/{}/'.format(out_folder))
 
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
@@ -71,7 +74,6 @@ def get_data_gen(
         rank=None,
         subject_batch_size=None,
 ):
-
     if fold is not None:
         with open(FOLD_FILE.format(fold), 'r') as f: fold_dict = yaml.safe_load(f)
         n_subjects = len(fold_dict[dataset_type])

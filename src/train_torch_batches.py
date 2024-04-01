@@ -51,7 +51,7 @@ def main(rank, world_size):
     images_path = os.path.join(config['input_folder'], 'images')
     labels_path = os.path.join(config['input_folder'], 'labels')
 
-    tb_writer, save_path = setup_paths(config_name)
+    tb_writer, save_path = setup_paths(config_name, config['load_train_state'])
 
     # start: data loading
     if rank == 0: logging.info(f"Loading {args.dataset_type} dataset from: {config['input_folder']}")
@@ -146,9 +146,9 @@ def main(rank, world_size):
         epoch_end_time = datetime.datetime.now()
         epoch_elapsed_sec = epoch_end_time - epoch_start_time
         if rank == 0: # log to tensorboard, save model, calculate vloss
-            logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}')
             epoch_loss = torch.mean(torch.stack(subj_batch_losses))
             tb_writer.add_scalar('Loss/Epoch Loss', epoch_loss, epoch + 1)
+            logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}, Loss: {epoch_loss}')
 
             model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
             model_save_name = model_save_name.format(epoch + 1)
