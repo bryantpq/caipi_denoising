@@ -72,7 +72,7 @@ def main(rank, world_size):
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    if network['decay_lr'] is not None: scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
     if config['load_train_state'] is not None:
         logging.info(f'Loading previous train state: {config["load_train_state"]}')
@@ -81,7 +81,7 @@ def main(rank, world_size):
         init_epoch  = checkpoint['epoch']
         tb_batch_id = checkpoint['tb_batch_id']
         optimizer.load_state_dict(checkpoint['optimizer'])
-        scheduler.load_state_dict(checkpoint['scheduler'])
+        if network['decay_lr'] is not None: scheduler.load_state_dict(checkpoint['scheduler'])
     else:
         init_epoch = 0
         tb_batch_id = 0
@@ -89,7 +89,7 @@ def main(rank, world_size):
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
             logging.info('********    Epoch {}/{}    ********'.format(epoch + 1, n_epochs))
-            logging.info('Learning rate: {}'.format(scheduler.get_last_lr()[0]))
+            if network['decay_lr'] is not None: logging.info('Learning rate: {}'.format(scheduler.get_last_lr()[0]))
             subj_batch_losses = []
         epoch_start_time = datetime.datetime.now()
 
@@ -142,7 +142,7 @@ def main(rank, world_size):
 
             # close for-loop training data
 
-        scheduler.step()
+        if network['decay_lr'] is not None: scheduler.step()
         epoch_end_time = datetime.datetime.now()
         epoch_elapsed_sec = epoch_end_time - epoch_start_time
         if rank == 0: # log to tensorboard, save model, calculate vloss
@@ -159,7 +159,7 @@ def main(rank, world_size):
                     'epoch': epoch + 1,
                     'tb_batch_id': tb_batch_id,
                     'optimizer': optimizer.state_dict(),
-                    'scheduler': scheduler.state_dict(),
+                    'scheduler': scheduler.state_dict() if network['decay_lr'] is not None else None,
             }
             torch.save(train_state, state_save_name)
             logging.info(f'    Saving model {model_save_name}')
