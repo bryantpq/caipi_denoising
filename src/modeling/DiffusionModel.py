@@ -271,10 +271,24 @@ class DiffusionModel(keras.Model):
         self.ema = ema
         self.last_loss = None
 
-    def variable_noise(self, shape, partitions, dtype):
-        pass
+    def variable_noise(self, shape, partitions=6, dtype=np.float32):
+        img_len = shape[-1]
+        assert img_len % partitions == 0, 'Shape of image must be fully divisible by partitions.'
 
-    def train_step(self, images):
+        res = np.random.normal(size=(img_len, img_len))
+        stds = [ 1.0 + i * 0.25 for i in range(1, partitions) ]
+
+        for std, p_ii in zip(stds, range(partitions - 1, 0, -1)):
+            mid = img_len // 2
+            part_len = (p_ii * img_len) // partitions
+            offset = part_len // 2
+
+            noise = np.random.normal(scale=std, size=(part_len, part_len))
+            res[mid - offset: mid + offset, mid - offset: mid + offset] = noise
+
+        return res
+
+    def train_step(self, images, variable_noise=False):
         # 1. Get the batch size
         batch_size = tf.shape(images)[0]
 
@@ -285,7 +299,11 @@ class DiffusionModel(keras.Model):
 
         with tf.GradientTape() as tape:
             # 3. Sample random noise to be added to the images in the batch
-            noise = tf.random.normal(shape=tf.shape(images), dtype=images.dtype)
+            if variable_noise:
+                res = np.stack([ variable_noise(tf.shape(images)[1:]) for i in range(batch_size) ])
+                noise = tf.convert_to_tensor(res)
+            else:
+                noise = tf.random.normal(shape=tf.shape(images), dtype=images.dtype)
 
             # 4. Diffuse the images with noise
             images_t = self.gdf_util.q_sample(images, t, noise)

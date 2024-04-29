@@ -4,6 +4,7 @@ import numpy as np
 import os
 import pdb
 import scipy.io
+import shutil
 
 from tqdm import tqdm
 
@@ -40,7 +41,6 @@ def main():
 
     for f in tqdm(files, ncols=90):
         print()
-        # msrebs_magnitude/outputs/CID019_EPI_CAIPI1x2.npy'
         print('Loading file: {}'.format(f))
         data = np.load(f)
         fname = f.split('/')[-1] 
@@ -48,28 +48,28 @@ def main():
         fname = os.path.join(RESULT_DIR, fname)
         print('Saving file: {}'.format(fname))
 
-        subject_id = '_'.join(f.split('/')[-1].split('_')[:3])
-        acceleration = f.split('/')[-1].split('_')[3].split('.')[0]
+        if args.study == 'cavsms':
+            acceleration = f.split('/')[-1].split('_')[3].split('.')[0]
+            subject_id = '_'.join(f.split('/')[-1].split('_')[:3])
+        elif args.study == 'msrebs':
+            acceleration = f.split('/')[-1].split('_')[1].split('.')[0]
+            subject_id = '_'.join(f.split('/')[-1].split('_')[:1])
 
         if args.postprocess:
             if args.study == 'cavsms':
-                #data = np.swapaxes(data, 0, 1)
-                #data = data[36:384-36,:,:]
-                #data = np.moveaxis(data, -1, 0)
-                #data = np.flip(data, axis=[0,1,2])
-                data = data[36:384-36,:,:]
+                data = data[36:384-36, :, :]
             elif args.study == 'msrebs':
-                data = data[12:384-12,:,:]
+                data = data[12:384-12, :, :]
+                data = np.flip(data, axis=1)
 
         if args.format in ['nifti', 'nii']:
-            nii_data = standardize_affine_header(data, subject_id, acceleration)
-            #nii_data = standardize_affine_header(data)
+            nii_data = standardize_affine_header(data, subject_id, acceleration, args.study)
             nib.save(nii_data, fname)
 
             if args.split_mag_pha and np.iscomplexobj(data):
                 mag_data, pha_data = np.abs(data), np.angle(data)
-                mag_nii = standardize_affine_header(mag_data, subject_id, acceleration)
-                pha_nii = standardize_affine_header(pha_data, subject_id, acceleration)
+                mag_nii = standardize_affine_header(mag_data, subject_id, acceleration, args.study)
+                pha_nii = standardize_affine_header(pha_data, subject_id, acceleration, args.study)
 
                 mag_fname = fname.split('.')[0] + '_Mag.' + '.'.join(fname.split('.')[1:])
                 pha_fname = fname.split('.')[0] + '_Pha.' + '.'.join(fname.split('.')[1:])
@@ -78,6 +78,13 @@ def main():
 
         elif args.format == 'mat':
             scipy.io.savemat(fname, dict(x=data))
+
+    exp, out_folder = RESULT_DIR.split('/')[-3:-1]
+    ANALYSIS_PATH = f'/home/quahb/caipi_denoising/data/datasets/analysis/denoised/{exp}/{out_folder}'
+    print(f'Copying {RESULT_DIR} to {ANALYSIS_PATH}...')
+    if os.path.exists(ANALYSIS_PATH):
+        shutil.rmtree(ANALYSIS_PATH)
+        shutil.copytree(RESULT_DIR, ANALYSIS_PATH)
 
     print('Complete!')
 

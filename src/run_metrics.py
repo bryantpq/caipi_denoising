@@ -11,8 +11,6 @@ from evaluation.metrics import snr, psnr, msnr, ssim, mask_intersect_cylinder, e
 from preparation.preprocessing_pipeline import magphase2complex
 
 PRECISION = 4
-UNACCELERATED_PATH = '/home/quahb/caipi_denoising/data/niftis/cavsms/'
-MASK_PATH = '/home/quahb/caipi_denoising/data/niftis/cavsms_masks/'
 MASK_THRESHOLD = 0.0
 
 def main():
@@ -25,22 +23,21 @@ def main():
     if args.output_path is not None:
         output_files = sorted(os.listdir(args.output_path))
 
+    UNACCELERATED_PATH = f'/home/quahb/caipi_denoising/data/niftis/{args.study}/'
+    MASK_PATH = f'/home/quahb/caipi_denoising/data/niftis/{args.study}_masks/'
+
     # TODO
     # output should be optional, only if two, then compute SSIM
 
     if args.file_type == 'nii':
         input_files  = [ os.path.join(args.input_path, f)  for f in input_files if '.nii.gz' in f ]
         output_files = [ os.path.join(args.output_path, f) for f in output_files if '.nii.gz' in f ]
-
-        assert len(input_files)  > 0, f'No input files found at {args.input_path}. Check that .npy files are converted to .nii.gz format.'
-        assert len(output_files) > 0, f'No output files found at {args.output_path}. Check that .npy files are converted to .nii.gz format.'
     elif args.file_type == 'npy':
         input_files  = [ os.path.join(args.input_path, f)  for f in input_files if '.npy' in f ]
         output_files = [ os.path.join(args.output_path, f) for f in output_files if '.npy' in f ]
 
-        assert len(input_files)  > 0, f'No input files found at {args.input_path}. Check that .npy files are converted to .nii.gz format.'
-        assert len(output_files) > 0, f'No output files found at {args.output_path}. Check that .npy files are converted to .nii.gz format.'
-
+    assert len(input_files)  > 0, f'No input files found at {args.input_path}. Check that .npy files are converted to .nii.gz format.'
+    assert len(output_files) > 0, f'No output files found at {args.output_path}. Check that .npy files are converted to .nii.gz format.'
     assert len(input_files) == len(output_files), f'{len(input_files)}, {len(output_files)}'
 
     if args.data_type in ['mag', 'magnitude']:
@@ -233,6 +230,7 @@ def create_parser():
     parser.add_argument('--unwrapped_phase_dir', default=None)
     parser.add_argument('file_type', choices=['npy', 'nii'])
     parser.add_argument('data_type', choices=['magnitude', 'mag', 'compleximage', 'complex'])
+    parser.add_argument('study', choices=['cavsms', 'msrebs'])
     parser.add_argument('input_path')
     parser.add_argument('output_path')
 

@@ -110,6 +110,8 @@ def load_raw_niftis(load_path, load_modalities, rescale_combine_mag_phase=True):
                 fname = fp.split('/')[-1].split('.')[0]
                 if lm == fname: # e.g. CAIPI1x2 in ../data/dataset/subj_id/CAIPI1x2.nii.gz
                     tmp = np.array(nib.load(fp).dataobj)
+                    if 'msrebs' in load_path:
+                        tmp = np.flip(tmp, axis=1)
                     res[subj][lm] = tmp
 
     if rescale_combine_mag_phase:

@@ -12,7 +12,7 @@ from sigfig import round
 from torch.utils.tensorboard import SummaryWriter
 
 FOLD_FILE = '/home/quahb/caipi_denoising/data/five_fold_split/fold{}.yaml'
-TRAIN_SIZE = 0.8
+TRAIN_SIZE, VAL_SIZE = 1.0, 0.0
 
 def batch_loss(model, images, labels, loss_fn, rank):
     images, labels = images.to(rank), labels.to(rank)

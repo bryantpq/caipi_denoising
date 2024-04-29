@@ -2,7 +2,6 @@ import bm3d
 import cv2
 import logging
 import numpy as np
-import tensorflow as tf
 import pdb
 
 from patchify import patchify
@@ -145,6 +144,14 @@ def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[
 
     return patches
 
+def rescale_complex(data, mag_range=[0, 1], pha_range=[-np.pi, np.pi]):
+    assert np.iscomplexobj(data)
+
+    mag, pha = np.abs(data), np.angle(data)
+    res = magphase2complex(mag, pha, rescale=True)
+
+    return res
+
 def magphase2complex(mag, pha, rescale=True):
     assert mag.shape == pha.shape, f'mag.shape: {mag.shape}, pha.shape: {pha.shape}'
 
@@ -188,6 +195,7 @@ def pad_square(data, pad_value=0.0):
     return data
     
 def random_xy_flip(data, subj_i, seed=24, mode='slice'):
+    import tensorflow as tf
     if mode == 'subject':
         data = tf.image.stateless_random_flip_up_down(data, seed=[subj_i, seed])
         data = tf.image.stateless_random_flip_left_right(data, seed=[subj_i, subj_i * seed])
