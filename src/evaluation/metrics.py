@@ -191,8 +191,8 @@ def erode_mask(img, kernel_size=5):
 
     return img_erode
 
-def mask_intersect_cylinder(mask):
-    cylinder = create_axial_cylinder_mask()
+def mask_intersect_cylinder(mask, rad=0.5):
+    cylinder = create_axial_cylinder_mask(rad=rad)
     cylinder[np.where(mask == 0)] = 0
 
     return cylinder

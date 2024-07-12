@@ -16,7 +16,7 @@ from torch.utils.data import TensorDataset, DataLoader, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 
 from modeling.torch_complex_utils import complex_mse
-from modeling.torch_models import get_model
+from modeling.torch_models import get_model, get_loss
 from preparation.preprocessing_pipeline import rescale_magnitude
 from utils.create_logger import create_logger
 from utils.train_torch_utils import batch_loss, get_data_gen, train_one_epoch, setup_paths
@@ -68,11 +68,12 @@ def main(rank, world_size):
     model = DDP(model, device_ids=[rank], output_device=rank)
 
     best_vloss = 1000000.
-    loss_fn = torch.nn.L1Loss()
+    loss_fn = get_loss(network['loss'])
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
-    if network['decay_lr'] is not None: scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    if network['decay_lr'] is not None: scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.97)
+    # lr at epoch x : lr(x) = init_lr * gamma**x
 
     if config['load_train_state'] is not None:
         logging.info(f'Loading previous train state: {config["load_train_state"]}')
@@ -225,7 +226,7 @@ def ddp_setup(rank, world_size):
     '''
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    init_process_group(backend='nccl', rank=rank, world_size=world_size)
+    init_process_group(backend='nccl', rank=rank, world_size=world_size, timeout=datetime.timedelta(hours=1))
     torch.cuda.set_device(rank)
 
 def create_parser():

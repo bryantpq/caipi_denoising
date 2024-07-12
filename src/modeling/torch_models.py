@@ -30,6 +30,25 @@ def get_model(model_type, dimensions, n_hidden_layers=None, residual_layer=None,
 
     return model
 
+def get_loss(loss):
+    if loss in ['mae', 'l1']:
+        loss_fn = torch.nn.L1Loss()
+    elif loss in ['mse', 'l2'] and 'magnitude' in config_name:
+        loss_fn = torch.nn.MSELoss()
+    elif loss in ['mse', 'l2'] and 'complex' in config_name:
+        def complex_mse_loss(output, target):
+            '''
+            Compute MSE as a complex number.
+            Return magnitude of the complex number.
+            '''
+            tmp = ( (output - target)**2 ).mean()
+            return torch.sqrt(torch.real(tmp)**2 + torch.imag(tmp)**2)
+        loss_fn = complex_mse_loss
+    else:
+        raise NotImplementedError()
+
+    return loss
+
 class DnCNN(nn.Module):
     def conv_layer(self, in_features, out_features):
         if self.dimensions == 2:
