@@ -63,12 +63,12 @@ def main(rank, world_size):
             residual_layer=network['residual_layer'],
             load_model_path=network['load_model_path']
     )
-    if rank == 0: print(model)
+    #if rank == 0: print(model)
     model.to(rank)
     model = DDP(model, device_ids=[rank], output_device=rank)
 
     best_vloss = 1000000.
-    loss_fn = get_loss(network['loss'])
+    loss_fn = get_loss(config_name, network['loss'])
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
@@ -216,7 +216,7 @@ def main(rank, world_size):
     destroy_process_group()
 
     if rank == 0:
-        logging.info(f'Time taken to train epoch {epoch + 1}: {total_train_time}')
+        logging.info(f'Time taken to train {epoch + 1} epochs: {total_train_time}')
         logging.info(f'Training complete for config: {config_name}')
 
 def ddp_setup(rank, world_size):
