@@ -218,6 +218,7 @@ def main(rank, world_size):
     if rank == 0:
         logging.info(f'Time taken to train {epoch + 1} epochs: {total_train_time}')
         logging.info(f'Training complete for config: {config_name}')
+        logging.info(config)
 
 def ddp_setup(rank, world_size):
     '''

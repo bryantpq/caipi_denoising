@@ -115,7 +115,7 @@ def denoise(
                 stage_arg=bm3d.BM3DStages.HARD_THRESHOLDING
         )
 
-    elif method in ['nl', 'nonlocal', 'nonlocalmeans']:
+    elif method in ['nlm', 'nl', 'nonlocal', 'nonlocalmeans']:
         data = rescale_magnitude(data, 0, 255).astype('uint8')
         denoised = np.zeros(data.shape, dtype=data.dtype)
         for ii in range(data.shape[2]):
@@ -126,6 +126,7 @@ def denoise(
                     templateWindowSize=templateWindowSize,
                     searchWindowSize=searchWindowSize
             )
+        denoised = rescale_magnitude(denoised.astype('float32'), 0, 1)
 
     return denoised
 

@@ -197,7 +197,7 @@ def mask_intersect_cylinder(mask, rad=0.5):
 
     return cylinder
 
-def create_axial_cylinder_mask(rad=0.7, size=(384, 312, 256)):
+def create_axial_cylinder_mask(rad=0.5, size=(384, 312, 256)):
     xx = np.linspace(-1, 1, size[2])
     yy = np.linspace(-1, 1, size[1])
 
@@ -224,11 +224,13 @@ def cnr(data, mask1, mask2):
     assert np.array_equal(np.unique(mask2), [0, 1]) or \
            np.array_equal(np.unique(mask2), [0]), 'Unexpected values for mask2'
 
+    data = np.abs(data)
+
     masked_values1 = data[np.where(mask1 == 1)]
     masked_values2 = data[np.where(mask2 == 1)]
 
-    num = abs(np.sum(masked_values1) - np.sum(masked_values2))
-    den = len(masked_values1) + len(masked_values2)
+    num = abs(np.mean(masked_values1) - np.mean(masked_values2))
+    den = np.mean(masked_values1) + np.mean(masked_values2)
 
     if den == 0: return None
 

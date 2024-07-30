@@ -1,7 +1,7 @@
 #!/bin/bash
 
-experiment="magnitude_3d_patches64"
-out_name="outputs"
+experiment="compleximage_2d_full"
+out_name="outputs_l2_0001"
 
 MYSCRIPT="predict_torch.py"
 MYPATH="/home/quahb/caipi_denoising/data/datasets/accelerated/${experiment}/{inputs,${out_name}}"
@@ -23,17 +23,18 @@ else
 fi
 
 models=(
-"/home/quahb/caipi_denoising/models/${experiment}_fold1_2024-06-28/${model_type}_ep100.pt"
-"/home/quahb/caipi_denoising/models/${experiment}_fold2_2024-07-02/${model_type}_ep100.pt"
-"/home/quahb/caipi_denoising/models/${experiment}_fold3_2024-07-02/${model_type}_ep100.pt"
-"/home/quahb/caipi_denoising/models/${experiment}_fold4_2024-07-07/${model_type}_ep100.pt"
-"/home/quahb/caipi_denoising/models/${experiment}_fold5_2024-06-28/${model_type}_ep100.pt"
+"/home/quahb/caipi_denoising/models/${experiment}_fold1_2024-07-24/${model_type}_ep100.pt"
+"/home/quahb/caipi_denoising/models/${experiment}_fold2_2024-07-25/${model_type}_ep100.pt"
+"/home/quahb/caipi_denoising/models/${experiment}_fold3_2024-07-26/${model_type}_ep100.pt"
+"/home/quahb/caipi_denoising/models/${experiment}_fold4_2024-07-27/${model_type}_ep100.pt"
+"/home/quahb/caipi_denoising/models/${experiment}_fold5_2024-07-29/${model_type}_ep100.pt"
 )
 
 for idx in ${!models[@]}
 do
-    fold=$((${idx} + 1))
     model=${models[$idx]}
+    fold=${model#*fold}
+    fold=`cut -d "_" -f1 <<< "$fold"`
     cmd="python ${MYSCRIPT} --type_dir --fold ${fold} ${dims} ${MYPATH} ${model} ${input_size} ${patching}"
     echo ${cmd}
     echo ""
