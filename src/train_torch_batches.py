@@ -91,8 +91,12 @@ def main(rank, world_size):
     best_epoch_vloss = -1
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
-            logging.info('********    Epoch {}/{}    ********'.format(epoch + 1, n_epochs))
-            if network['decay_lr'] is not None: logging.info('Learning rate: {}'.format(scheduler.get_last_lr()[0]))
+            logging.info('******************            Epoch {}/{}            ******************'.format(epoch + 1, n_epochs))
+            if network['decay_lr'] is not None: 
+                lr = scheduler.get_last_lr()[0]
+                logging.info('Learning rate: {}'.format(lr))
+                tb_writer.add_scalar('Learning Rate', lr, epoch + 1)
+                tb_writer.flush()
         subj_batch_losses = []
         epoch_start_time = datetime.datetime.now()
 
@@ -153,6 +157,7 @@ def main(rank, world_size):
         # log to tensorboard, save model, calculate vloss
         if rank == 0: 
             tb_writer.add_scalar('Loss/Train', epoch_loss, epoch + 1)
+            tb_writer.flush()
             logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}, Loss: {epoch_loss}')
 
             model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
