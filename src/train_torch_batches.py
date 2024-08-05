@@ -199,7 +199,7 @@ def main(rank, world_size):
                         batch_size=batch_size, 
                         shuffle=False, 
                 )
-                if rank == 0: logging.info('Batch size: {}, Num batches: Valid: {}'.format(batch_size, len(valid_loader)))
+                if rank == 0: logging.info('Valid Batch size: {}, Num batches: {}; X_valid, y_valid: {}, {}'.format(batch_size, len(valid_loader), X_valid.shape, y_valid.shape))
 
                 with torch.no_grad():
                     for i, vdata in enumerate(valid_loader):
