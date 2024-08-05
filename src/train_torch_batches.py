@@ -23,7 +23,7 @@ from utils.train_torch_utils import batch_loss, get_data_gen, train_one_epoch, s
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-RUN_VALIDATION = False
+RUN_VALIDATION = True
 
 def main(rank, world_size):
     ddp_setup(rank, world_size)
@@ -51,6 +51,7 @@ def main(rank, world_size):
     images_path = os.path.join(config['input_folder'], 'images')
     labels_path = os.path.join(config['input_folder'], 'labels')
 
+    if 'run_validation' in config: run_validation = config['run_validation']
     tb_writer, save_path = setup_paths(config_name, config['load_train_state'])
 
     # start: data loading
@@ -63,11 +64,10 @@ def main(rank, world_size):
             residual_layer=network['residual_layer'],
             load_model_path=network['load_model_path']
     )
-    #if rank == 0: print(model)
+    if rank == 0: logging.debug(model)
     model.to(rank)
     model = DDP(model, device_ids=[rank], output_device=rank)
 
-    best_vloss = 1000000.
     loss_fn = get_loss(config_name, network['loss'])
 
     train_start_time = datetime.datetime.now()
@@ -87,11 +87,13 @@ def main(rank, world_size):
         init_epoch = 0
         tb_batch_id = 0
 
+    best_vloss = 1000000.0
+    best_epoch_vloss = -1
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
             logging.info('********    Epoch {}/{}    ********'.format(epoch + 1, n_epochs))
             if network['decay_lr'] is not None: logging.info('Learning rate: {}'.format(scheduler.get_last_lr()[0]))
-            subj_batch_losses = []
+        subj_batch_losses = []
         epoch_start_time = datetime.datetime.now()
 
         train_gen = get_data_gen(
@@ -134,21 +136,23 @@ def main(rank, world_size):
                     tb_writer,
                     rank,
             )
+            subj_batch_losses.append(avg_loss)
 
             del train_set, train_sampler, train_loader
 
             if rank == 0:
                 logging.info(f'Epoch {epoch + 1}: Completed Subject Batch {batch_i + 1}')
-                subj_batch_losses.append(avg_loss)
 
             # close for-loop training data
 
         if network['decay_lr'] is not None: scheduler.step()
         epoch_end_time = datetime.datetime.now()
         epoch_elapsed_sec = epoch_end_time - epoch_start_time
-        if rank == 0: # log to tensorboard, save model, calculate vloss
-            epoch_loss = torch.mean(torch.stack(subj_batch_losses))
-            tb_writer.add_scalar('Loss/Epoch Loss', epoch_loss, epoch + 1)
+
+        epoch_loss = torch.mean(torch.stack(subj_batch_losses))
+        # log to tensorboard, save model, calculate vloss
+        if rank == 0: 
+            tb_writer.add_scalar('Loss/Train', epoch_loss, epoch + 1)
             logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}, Loss: {epoch_loss}')
 
             model_save_name = os.path.join(save_path, model_type + '_ep{}.pt')
@@ -170,44 +174,45 @@ def main(rank, world_size):
             #    if model_type == 'dcsrn':
             #        tb_writer.add_images(f'Epoch {epoch} final layer', epoch)
 
-            if RUN_VALIDATION:
-                model.eval()
-                valid_gen = get_data_gen(
-                        args.fold, images_path, labels_path, dimensions, data_format,
-                        dataset_type='valid',
-                        rank=rank,
-                        subject_batch_size=8,
-                )
+        if RUN_VALIDATION:
+            if rank == 0: logging.info('Running validation...')
+            model.eval()
 
-                X_valid, y_valid = list(valid_gen)[0]
+            VAL_SUBJECTS = 5
+            valid_gen = get_data_gen(
+                    args.fold, images_path, labels_path, dimensions, data_format,
+                    dataset_type='valid',
+                    rank=rank,
+                    subject_batch_size=VAL_SUBJECTS,
+            )
 
+            running_vloss = 0.0
+            for batch_i, (X_valid, y_valid) in enumerate(valid_gen):
                 valid_set = TensorDataset(X_valid, y_valid)
                 valid_loader = DataLoader(
                         valid_set,
                         batch_size=batch_size, 
                         shuffle=False, 
                 )
-                logging.info('Batch size: {}, Num batches: Valid: {}'.format(batch_size, len(valid_loader)))
+                if rank == 0: logging.info('Batch size: {}, Num batches: Valid: {}'.format(batch_size, len(valid_loader)))
 
-                running_vloss = 0.0
                 with torch.no_grad():
                     for i, vdata in enumerate(valid_loader):
                         vimages, vlabels = vdata
                         vloss = batch_loss(model, vimages, vlabels, loss_fn, rank)
                         running_vloss += vloss
 
-                avg_vloss = running_vloss / (i + 1)
-                train_loss, valid_loss = round(avg_loss, sigfigs=5), round(avg_vloss.item(), sigfigs=5)
-                logging.info('    Average Loss: Train {}, Valid {}'.format(train_loss, valid_loss))
+            avg_vloss = running_vloss / (i + 1)
+            train_loss, valid_loss = round(epoch_loss.item(), sigfigs=5), round(avg_vloss.item(), sigfigs=5)
+            if rank == 0: logging.info('    Epoch {} Average Loss: Train {}, Valid {}'.format(epoch + 1, train_loss, valid_loss))
 
-                tb_writer.add_scalars('Training vs. Validation Loss',
-                        { 'Training': avg_loss, 'Validation': avg_vloss }, epoch + 1)
-                tb_writer.flush()
+            tb_writer.add_scalar('Loss/Validation', avg_vloss, epoch + 1)
+            tb_writer.flush()
 
-                if avg_vloss < best_vloss:
-                    best_vloss = avg_vloss.item()
-                    valid_loss, best_vloss = round(avg_vloss.item(), sigfigs=5), round(best_vloss, sigfigs=5)
-                    logging.info('    Valid loss {} better than {}'.format(valid_loss, best_vloss))
+            if avg_vloss < best_vloss:
+                if rank == 0: logging.info('    Valid loss {} better than {}'.format(valid_loss, best_vloss))
+                best_vloss = avg_vloss.item()
+                best_epoch_vloss = epoch + 1
             # close validation block
         # close epoch for loop
 
@@ -216,6 +221,7 @@ def main(rank, world_size):
     destroy_process_group()
 
     if rank == 0:
+        if RUN_VALIDATION: logging.info(f'Best validation at epoch: {best_epoch_vloss} with {best_vloss}')
         logging.info(f'Time taken to train {epoch + 1} epochs: {total_train_time}')
         logging.info(f'Training complete for config: {config_name}')
         logging.info(config)
