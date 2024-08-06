@@ -92,11 +92,10 @@ def main(rank, world_size):
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
             logging.info('******************            Epoch {}/{}            ******************'.format(epoch + 1, n_epochs))
-            if network['decay_lr'] is not None: 
-                lr = scheduler.get_last_lr()[0]
-                logging.info('Learning rate: {}'.format(lr))
-                tb_writer.add_scalar('Learning Rate', lr, epoch + 1)
-                tb_writer.flush()
+            lr = scheduler.get_last_lr()[0]
+            logging.info('Learning rate: {}'.format(lr))
+            tb_writer.add_scalar('Learning Rate', lr, epoch + 1)
+            tb_writer.flush()
         subj_batch_losses = []
         epoch_start_time = datetime.datetime.now()
 
