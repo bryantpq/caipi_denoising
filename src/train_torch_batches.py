@@ -92,7 +92,10 @@ def main(rank, world_size):
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
             logging.info('******************            Epoch {}/{}            ******************'.format(epoch + 1, n_epochs))
-            lr = scheduler.get_last_lr()[0]
+            if network['decay_lr'] is not None:
+                lr = scheduler.get_last_lr()[0]
+            else:
+                lr = network['learning_rate']
             logging.info('Learning rate: {}'.format(lr))
             tb_writer.add_scalar('Learning Rate', lr, epoch + 1)
             tb_writer.flush()
@@ -155,7 +158,7 @@ def main(rank, world_size):
         epoch_loss = torch.mean(torch.stack(subj_batch_losses))
         # log to tensorboard, save model, calculate vloss
         if rank == 0: 
-            tb_writer.add_scalar('Loss/Train', epoch_loss, epoch + 1)
+            tb_writer.add_scalar('Loss/Epoch', epoch_loss, epoch + 1)
             tb_writer.flush()
             logging.info(f'Completed fold-{args.fold} Epoch {epoch + 1}/{n_epochs}: {epoch_elapsed_sec}, Loss: {epoch_loss}')
 
@@ -210,7 +213,14 @@ def main(rank, world_size):
             train_loss, valid_loss = round(epoch_loss.item(), sigfigs=5), round(avg_vloss.item(), sigfigs=5)
             if rank == 0: logging.info('    Epoch {} Average Loss: Train {}, Valid {}'.format(epoch + 1, train_loss, valid_loss))
 
-            tb_writer.add_scalar('Loss/Validation', avg_vloss, epoch + 1)
+            tb_writer.add_scalars(
+                    'Loss/Train vs Valid',
+                    {
+                        'Train': epoch_loss,
+                        'Valid': avg_vloss,
+                    },
+                    epoch + 1
+            )
             tb_writer.flush()
 
             if avg_vloss < best_vloss:
