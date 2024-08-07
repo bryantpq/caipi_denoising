@@ -72,8 +72,9 @@ def main(rank, world_size):
 
     train_start_time = datetime.datetime.now()
     optimizer = torch.optim.Adam(model.parameters(), lr=network['learning_rate'])
-    if network['decay_lr'] is not None: scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.97)
+    if network['decay_lr'] is not None: scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
     # lr at epoch x : lr(x) = init_lr * gamma**x
+    # lr = lambda x: init_lr * gamma**x
 
     if config['load_train_state'] is not None:
         logging.info(f'Loading previous train state: {config["load_train_state"]}')
@@ -87,7 +88,7 @@ def main(rank, world_size):
         init_epoch = 0
         tb_batch_id = 0
 
-    best_vloss = 1000000.0
+    best_vloss = 100000.0
     best_epoch_vloss = -1
     for epoch in range(init_epoch, n_epochs):
         if rank == 0:
