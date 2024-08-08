@@ -10,10 +10,7 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    exp, _, __ = args.experiment.split('/')[-4:-1]
-    print(args.experiment.split('/')[-4:-1])
-    print(exp, _, __)
-    assert _ == 'outputs', print(_)
+    exp, out_folder, __ = args.experiment.split('/')[-4:-1]
     assert __ == 'nii', print(__)
 
     files = [ os.path.join(args.experiment, f) for f in os.listdir(args.experiment) ]
@@ -24,7 +21,13 @@ def main():
         if '1_01_037-V1-2' in f:
             continue
         subj = get_subj(f)
-        dst = os.path.join(analysis_folder, subj, 'denoised', exp)
+        if args.out_folder is not None:
+            dst = os.path.join(analysis_folder, subj, 'denoised', args.out_folder)
+        elif out_folder == 'outputs':
+            dst = os.path.join(analysis_folder, subj, 'denoised', exp)
+        else:
+            dst = os.path.join(analysis_folder, subj, 'denoised', '{}_{}'.format(exp, out_folder))
+        os.makedirs(dst, exist_ok=True)
 
         print(f'Copying {f}   ->   {dst}')
         shutil.copy2(f, dst)
@@ -43,6 +46,7 @@ def create_parser():
     parser = argparse.ArgumentParser()
     # /home/quahb/caipi_denoising/data/datasets/accelerated/magnitude_3d_patches64/outputs/nii/
     parser.add_argument('experiment')
+    parser.add_argument('--out_folder')
 
     return parser
 

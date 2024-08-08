@@ -14,11 +14,11 @@ from tqdm import tqdm
 
 from modeling.torch_models import get_model
 from preparation.data_io import write_data
+from preparation.preprocessing_pipeline import rescale_magnitude, rescale_complex
 
 FULL_BATCH_SIZE = 8
 PATCH_BATCH_SIZE = 8
 N_HIDDEN_LAYERS = 12
-RESIDUAL_LAYER  = True
 
 def main():
     parser = create_parser()
@@ -28,7 +28,8 @@ def main():
     model_type = args.model_path.split('/')[-1].split('_')[0]
 
     print(f'Model {model_type}: {args.model_path}')
-    model = get_model(model_type, args.dimensions, N_HIDDEN_LAYERS, RESIDUAL_LAYER)
+    print(f'Residual layer: {args.residual_layer}')
+    model = get_model(model_type, args.dimensions, N_HIDDEN_LAYERS, args.residual_layer)
     model.load_state_dict(torch.load(args.model_path, map_location='cpu'))
     model.eval()
     model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
@@ -157,6 +158,12 @@ def main():
             write_data(patches, after_patches_name, save_dtype, save_format=fext)
             print(f'Saving debug patches {after_patches_name}')
 
+        if args.rescale:
+            if np.iscomplexobj(output):
+                output = rescale_complex(output)
+            else:
+                output = rescale_magnitude(output)
+
         write_data(output, out_name, save_dtype, save_format=fext)
         print(f' Saving: {out_name}')
 
@@ -172,6 +179,8 @@ def create_parser():
     parser.add_argument('--dataset_type', choices=['train', 'valid', 'test', 'overfit_one', 'train_valid'], default='test')
     parser.add_argument('--debug_patches', action='store_true')
     parser.add_argument('--extract_patches', action='store_true')
+    parser.add_argument('--rescale', action='store_true')
+    parser.add_argument('--residual_layer', action='store_true', default=False)
     parser.add_argument('--extract_step', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,6])
     parser.add_argument('--input_size', nargs='+', type=int, help='[ length width ]')

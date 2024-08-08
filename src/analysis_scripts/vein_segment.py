@@ -38,10 +38,11 @@ def main():
             text=True
     )
     #print(result.stdout)
-    print(result.stderr)
+    #print(result.stderr)
 
     # 3. remove brain mask
     print('Removing bet file:', bet_file)
+    print()
     result = subprocess.run(
             ['rm', bet_file]
     )

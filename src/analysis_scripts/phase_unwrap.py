@@ -4,6 +4,8 @@ import numpy as np
 import os
 import pdb
 import subprocess
+import sys
+sys.path.append('/home/quahb/caipi_denoising/src')
 
 from preparation.preprocessing_pipeline import rescale_magnitude
 from tqdm import tqdm
@@ -11,6 +13,8 @@ from tqdm import tqdm
 def main():
     parser = create_parser()
     args = parser.parse_args()
+    args.bet = os.path.abspath(args.bet)
+    args.phase = os.path.abspath(args.phase)
 
     # Rescale phase data
     phase_nii = nib.load(args.phase)
@@ -35,7 +39,7 @@ def main():
             text=True
     )
     #print(result.stdout)
-    print(result.stderr)
+    #print(result.stderr)
 
     res = os.path.join(outpath, outname + '.nii.gz')
     out_nii = nib.load(res)
@@ -43,6 +47,8 @@ def main():
     out_data = nib.Nifti1Image(out_data, affine=phase_nii.affine, header=phase_nii.header)
     out_data.header.set_data_dtype('float32')
     nib.save(out_data, res)
+    print(f'Saving unwrapped phase to {res}')
+    print()
 
 def create_parser():
     parser = argparse.ArgumentParser()
