@@ -228,6 +228,8 @@ def main(rank, world_size):
                 if rank == 0: logging.info('    Valid loss {} better than {}'.format(valid_loss, best_vloss))
                 best_vloss = avg_vloss.item()
                 best_epoch_vloss = epoch + 1
+            if rank == 0 and epoch < n_epochs:
+                if RUN_VALIDATION: logging.info(f'Best validation at epoch: {best_epoch_vloss} with {best_vloss}')
             # close validation block
         # close epoch for loop
 

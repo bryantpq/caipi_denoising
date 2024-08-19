@@ -45,8 +45,8 @@ def load_dataset(data_folders, dimensions, data_format, return_names=False, ids=
                 files = files[:batch]
 
         if rank == 0 or rank is None:
-            logging.info(f'    Loading {len(files)} subjects from {data_folder}')
-            logging.info( '    {}'.format([ f.split('/')[-1] for f in files ]))
+            logging.debug(f'    Loading {len(files)} subjects from {data_folder}')
+            logging.debug( '    {}'.format([ f.split('/')[-1] for f in files ]))
 
         data = []
 

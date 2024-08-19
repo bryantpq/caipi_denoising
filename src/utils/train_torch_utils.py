@@ -24,6 +24,9 @@ def batch_loss(model, images, labels, loss_fn, rank):
 
     return loss
 
+def batch_accuracy():
+    pass
+
 def setup_paths(config_name, load_train_state):
     if load_train_state is None:
         out_folder = '{}_{}'.format(config_name, date.today())
@@ -101,8 +104,8 @@ def get_data_gen(
 
     for i, batch_i in enumerate(batch_indices):
         if fold is not None:
-            if rank is not None: logging.info(f'Rank {rank}: Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
-            else: logging.info(f'Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
+            if rank is not None: logging.debug(f'Rank {rank}: Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
+            else: logging.debug(f'Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
 
             X, y = load_dataset(
                     [images_path, labels_path], 
@@ -117,8 +120,8 @@ def get_data_gen(
             X, y = X[shuffle], y[shuffle]
 
         else: # load entire dataset and then split into train/val
-            if rank is not None: logging.info(f'Rank {rank}: Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
-            else: logging.info(f'Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
+            if rank is not None: logging.debug(f'Rank {rank}: Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
+            else: logging.debug(f'Loading {dataset_type} set from fold-{fold} batch {i+1}/{len(batch_indices)}.')
 
             images, labels = load_dataset(
                     [images_path, labels_path],
@@ -127,7 +130,7 @@ def get_data_gen(
                     batch=batch_i,
                     rank=rank
             )
-            logging.info(f'Images, Labels dimensions: {images.shape}, {labels.shape}')
+            logging.debug(f'Images, Labels dimensions: {images.shape}, {labels.shape}')
 
             shuffle = np.random.RandomState(seed=42).permutation(len(images))
             images, labels = images[shuffle], labels[shuffle]

@@ -14,10 +14,10 @@ from tqdm import tqdm
 
 from modeling.torch_models import get_model
 from preparation.data_io import write_data
-from preparation.preprocessing_pipeline import rescale_magnitude, rescale_complex
+from preparation.preprocessing_pipeline import clip_interval_range, rescale_magnitude, rescale_complex
 
 FULL_BATCH_SIZE = 8
-PATCH_BATCH_SIZE = 8
+PATCH_BATCH_SIZE = 16
 N_HIDDEN_LAYERS = 12
 
 def main():
@@ -158,6 +158,12 @@ def main():
             write_data(patches, after_patches_name, save_dtype, save_format=fext)
             print(f'Saving debug patches {after_patches_name}')
 
+        if args.clip_range:
+            if np.iscomplexobj(output):
+                raise NotImplementedError()
+            else:
+                output = clip_interval_range(output, interval=0.95)
+
         if args.rescale:
             if np.iscomplexobj(output):
                 output = rescale_complex(output)
@@ -179,6 +185,7 @@ def create_parser():
     parser.add_argument('--dataset_type', choices=['train', 'valid', 'test', 'overfit_one', 'train_valid'], default='test')
     parser.add_argument('--debug_patches', action='store_true')
     parser.add_argument('--extract_patches', action='store_true')
+    parser.add_argument('--clip_range', type=float)
     parser.add_argument('--rescale', action='store_true')
     parser.add_argument('--residual_layer', action='store_true', default=False)
     parser.add_argument('--extract_step', nargs='+', type=int, help='[ length width ]')

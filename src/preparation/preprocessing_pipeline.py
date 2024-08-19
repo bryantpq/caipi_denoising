@@ -1,6 +1,7 @@
 import bm3d
 import cv2
 import logging
+import math
 import numpy as np
 import pdb
 
@@ -216,6 +217,17 @@ def random_xy_flip(data, subj_i, seed=24, mode='slice'):
     data = np.array(data)
 
     return data
+
+def clip_interval_range(data, interval=0.95):
+    data = np.abs(data)
+    tmp = data.reshape(-1)
+    tmp = np.sort(tmp)
+
+    outliers = (1 - interval) / 2
+    low, high = math.floor(len(tmp) * outliers), math.ceil( len(tmp) * (outliers + interval) )
+    low, high = tmp[low], tmp[high]
+
+    return np.clip(data, low, high)
 
 def rescale_magnitude(data, t_min=0.0, t_max=1.0):
     r_min, r_max = np.min(data), np.max(data)

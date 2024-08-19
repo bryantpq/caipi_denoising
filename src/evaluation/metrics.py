@@ -269,12 +269,6 @@ def structure(X, y):
 
     return num / den
 
-def my_mse(X, y):
-    total = np.sum(np.power(X - y, 2))
-    N = np.product(X.shape)
-
-    return total / N
-
 def my_psnr(X, y):
     MAX_INTENSITY = np.max(X)
     m = my_mse(X, y)
