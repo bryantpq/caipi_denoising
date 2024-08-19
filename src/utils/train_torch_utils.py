@@ -57,7 +57,7 @@ def train_one_epoch(model, loss_fn, optimizer, train_loader, epoch, tb_batch_id,
         running_loss += loss.item()
 
     last_loss = running_loss / n_batches
-    logging.info('  Rank {} Batch ID {} loss: {}'.format(
+    logging.info('      Rank {} Batch ID {} loss: {}'.format(
         rank, tb_batch_id, round(last_loss, sigfigs=5)
     ))
 

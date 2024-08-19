@@ -148,7 +148,7 @@ def main(rank, world_size):
             del train_set, train_sampler, train_loader
 
             if rank == 0:
-                logging.info(f'Epoch {epoch + 1}: Completed Subject Batch {batch_i + 1}')
+                logging.debug(f'Epoch {epoch + 1}: Completed Subject Batch {batch_i + 1}')
 
             # close for-loop training data
 
@@ -229,7 +229,7 @@ def main(rank, world_size):
                 best_vloss = avg_vloss.item()
                 best_epoch_vloss = epoch + 1
             if rank == 0 and epoch < n_epochs:
-                if RUN_VALIDATION: logging.info(f'Best validation at epoch: {best_epoch_vloss} with {best_vloss}')
+                if RUN_VALIDATION: logging.info(f'    Best validation at epoch: {best_epoch_vloss} with {best_vloss}')
             # close validation block
         # close epoch for loop
 
