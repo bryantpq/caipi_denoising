@@ -8,6 +8,7 @@ import shutil
 import sys
 sys.path.append('/home/quahb/caipi_denoising/src')
 
+from multiprocessing import Process
 from tqdm import tqdm
 
 from utils.standardize_nifti import standardize_affine_header
@@ -41,7 +42,7 @@ def main():
     if args.postprocess: print('Postprocessing data...')
     if args.split_mag_pha: print('Splitting magnitude and phase data...')
 
-    for f in tqdm(files, ncols=90):
+    def task(f):
         print()
         print('Loading file: {}'.format(f))
         data = np.load(f)
@@ -52,6 +53,9 @@ def main():
 
         if args.study == 'cavsms':
             acceleration = f.split('/')[-1].split('_')[3].split('.')[0]
+            if acceleration == 'rNC':
+                acceleration = f.split('/')[-1].split('_')[-1].split('.')[0] # m2x2Warped
+                acceleration = 'CAIPI' + acceleration[1:4]
             subject_id = '_'.join(f.split('/')[-1].split('_')[:3])
             if '3D' in acceleration: acceleration = '3D_T2STAR_segEPI'
 
@@ -82,6 +86,13 @@ def main():
 
         elif args.format == 'mat':
             scipy.io.savemat(fname, dict(x=data))
+
+    processes = [ Process(target=task, args=(f,)) for f in files ]
+
+    for p in processes: p.start()
+    for p in processes: p.join()
+    
+    print('Done processing', flush=True)
 
     exp, out_folder = RESULT_DIR.split('/')[-3:-1]
     ANALYSIS_PATH = f'/home/quahb/caipi_denoising/data/datasets/analysis/denoised/{exp}/{out_folder}'

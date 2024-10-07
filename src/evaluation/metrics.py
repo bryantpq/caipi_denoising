@@ -269,11 +269,18 @@ def structure(X, y):
 
     return num / den
 
-def my_psnr(X, y):
-    MAX_INTENSITY = np.max(X)
-    m = my_mse(X, y)
+def my_psnr(X, y, data_range=1):
+    data_range = 1.0
+    err = complex_mse(X, y)
 
-    return 10 * math.log10(MAX_INTENSITY / m)
+    return 10 * math.log10(data_range / np.sqrt(err))
 
-def frangi(data, th=0.01):
-    pass
+def complex_mse(x, y):
+    return np.mean(np.abs(x - y)**2)
+
+def complex_psnr(x, y):
+    err = complex_mse(x, y)
+    
+    data_range = np.abs( (np.complex(0, -np.pi) - np.complex(1, np.pi))**2 )
+
+    return 10 * np.log10((data_range) / np.sqrt(err))

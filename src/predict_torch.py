@@ -16,8 +16,6 @@ from modeling.torch_models import get_model
 from preparation.data_io import write_data
 from preparation.preprocessing_pipeline import clip_interval_range, rescale_magnitude, rescale_complex
 
-FULL_BATCH_SIZE = 8
-PATCH_BATCH_SIZE = 16
 N_HIDDEN_LAYERS = 12
 
 def main():
@@ -25,7 +23,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_type = args.model_path.split('/')[-1].split('_')[0]
+    model_type = '_'.join(args.model_path.split('/')[-1].split('_')[:-1])
 
     print(f'Model {model_type}: {args.model_path}')
     print(f'Residual layer: {args.residual_layer}')
@@ -51,6 +49,8 @@ def main():
                     subj_id = subj_id.split('-')
                     if len(subj_id) == 2: subj_id = subj_id[0] + '-V1'
                     elif len(subj_id) == 3: subj_id = subj_id[0] + '-V1-2'
+                elif 'rNC' in subj_id:
+                    subj_id = '_'.join(subj_id.split('_')[:-2]) # 1_02_030-V1_rNC_m1x2Warped.npy
                 else:
                     raise NotImplementedError(f'Unrecognized filename: {subj_id}')
                 if subj_id in fold_split[args.dataset_type]: keep.append(f)
@@ -97,7 +97,7 @@ def main():
             patches = np.moveaxis(patches, -1, 1) # [NPATCHES, 1, PATCH_LEN, PATCH_LEN]
             patches = torch.tensor(patches)
             patches = TensorDataset(patches)
-            patches_loader = DataLoader(patches, batch_size=PATCH_BATCH_SIZE)
+            patches_loader = DataLoader(patches, batch_size=args.batch_size)
 
             # run prediction
             patches_out = []
@@ -128,7 +128,7 @@ def main():
             data = np.moveaxis(data, -1, 1) # 256, 1, 384, 384
             data = torch.tensor(data)
             data = TensorDataset(data)
-            data_loader = DataLoader(data, batch_size=FULL_BATCH_SIZE)
+            data_loader = DataLoader(data, batch_size=args.batch_size)
 
             # run prediction
             data_out = []
@@ -185,13 +185,14 @@ def create_parser():
     parser.add_argument('--dataset_type', choices=['train', 'valid', 'test', 'overfit_one', 'train_valid'], default='test')
     parser.add_argument('--debug_patches', action='store_true')
     parser.add_argument('--extract_patches', action='store_true')
-    parser.add_argument('--clip_range', type=float)
+    parser.add_argument('--clip_range', type=int)
     parser.add_argument('--rescale', action='store_true')
     parser.add_argument('--residual_layer', action='store_true', default=False)
     parser.add_argument('--extract_step', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('--fold', type=int, choices=[1,2,3,4,5,6])
     parser.add_argument('--input_size', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('--type_dir', action='store_true', help='input_path/output_path will be intepreted as dirs')
+    parser.add_argument('--batch_size', type=int)
 
     return parser
 

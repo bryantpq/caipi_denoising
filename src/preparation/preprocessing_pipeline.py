@@ -182,6 +182,62 @@ def normalize(data):
 
     return data
 
+def _get_larger_two_indices_from_volume(data):
+    '''
+    Given a 3D volume, return the 2 axes which have the largest image dimensions.
+    '''
+    sort_maxes = sorted(data.shape)
+    if sort_maxes[0] == sort_maxes[1]:
+        max1 = data.index(sort_maxes[0])
+        max2 = max1 + 1
+    else:
+        max1, max2 = data.index(sort_maxes[0]), data.index(sort_maxes[1])
+
+    return max1, max2
+
+def remove_padding(data, target_shape):
+    unpad = []
+    for src, tar in zip(data.shape, target_shape):
+        assert src >= tar
+        dim = (src - tar) // 2
+        unpad.append( (dim, dim) )
+
+    res = data[ 
+            unpad[0][0]: data.shape[0] - unpad[0][1],
+            unpad[1][0]: data.shape[1] - unpad[1][1],
+            unpad[2][0]: data.shape[2] - unpad[2][1],
+    ]
+
+    return res
+
+def pad_square_v2(data, pad_value=0.0):
+    logging.debug('Pad square:')
+    logging.debug(f'    Before: {data.shape}')
+
+    i1, i2 = _get_larger_two_indices_from_volume(data)
+    largest_dim = max(data.shape[i1], data.shape[i2])
+    pad_len1 = (largest_dim - data.shape[i1]) // 2
+    pad_len2 = (largest_dim - data.shape[i2]) // 2
+
+    pad_arr = []
+    for ii in range(3):
+        if ii == i1:
+            pad_arr.append( (pad_len1, pad_len1) )
+        elif ii == i2:
+            pad_arr.append( (pad_len2, pad_len2) )
+        else:
+            pad_arr.append( (0, 0) )
+
+    data = np.pad(
+            data,
+            pad_arr,
+            constant_values=pad_value,
+    )
+
+    logging.debug(f'    After: {data.shape}')
+
+    return data
+
 def pad_square(data, pad_value=0.0):
     logging.debug('Pad square:')
     logging.debug(f'    Before: {data.shape}')
