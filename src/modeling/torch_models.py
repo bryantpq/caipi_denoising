@@ -20,6 +20,7 @@ def get_model(model_type, dimensions, n_hidden_layers=None, residual_layer=None,
     elif model_type == 'fsrcnn':
         model = FSRCNN(dimensions, 56, 12, 4)
     elif model_type == 'dcsrn':
+        logging.warning('Model size might take too much GPU memory')
         model = DCSRN(dimensions, fn='relu')
     elif model_type == 'my_dcsrn':
         model = myDCSRN(dimensions, fn='relu', residual_layer=residual_layer)
@@ -43,6 +44,11 @@ def get_loss(config_name, loss):
             '''
             tmp = ( (output - target)**2 ).mean()
             return torch.sqrt(torch.real(tmp)**2 + torch.imag(tmp)**2)
+            #return torch.abs(tmp)
+            #return torch.real(tmp) + torch.imag(tmp)
+            #return torch.abs(tmp) + torch.angle(tmp)
+            #return 2*torch.abs(tmp) + torch.angle(tmp)
+
         loss = complex_mse_loss
     else:
         raise NotImplementedError()
@@ -248,25 +254,23 @@ class myDCSRN(nn.Module):
         CAT_AXIS = 1
         c1 = self.c1(tensor)
 
-        x = self.n1(c1)
-        x = self.a1(x)
-        x = self.c2(x)
+        n1 = self.n1(c1)
+        a1 = self.a1(n1)
+        c2 = self.c2(a1)
 
-        x = self.n2(x)
-        x = self.a2(x)
-        x = self.c3(x)
+        n2 = self.n2(c2 + c1)
+        a2 = self.a2(n2)
+        c3 = self.c3(a2)
 
-        x = self.n3(x)
-        x = self.a3(x)
-        x = self.c4(x)
+        n3 = self.n3(c3 + c2 + c1)
+        a3 = self.a3(n3)
+        c4 = self.c4(a3)
 
-        x = self.n4(x)
-        x = self.a4(x)
-        x = self.c5(x)
+        n4 = self.n4(c4 + c3 + c2 + c1)
+        a4 = self.a4(n4)
+        c5 = self.c5(a4)
 
-        c6 = self.c6(x)
-
-        if self.residual_layer: c6 = c6 + tensor
+        c6 = self.c6(c5 + c4 + c3 + c2 + c1)
 
         return c6
 
