@@ -20,7 +20,6 @@ def get_model(model_type, dimensions, n_hidden_layers=None, residual_layer=None,
     elif model_type == 'fsrcnn':
         model = FSRCNN(dimensions, 56, 12, 4)
     elif model_type == 'dcsrn':
-        logging.warning('Model size might take too much GPU memory')
         model = DCSRN(dimensions, fn='relu')
     elif model_type == 'my_dcsrn':
         model = myDCSRN(dimensions, fn='relu', residual_layer=residual_layer)
@@ -258,19 +257,21 @@ class myDCSRN(nn.Module):
         a1 = self.a1(n1)
         c2 = self.c2(a1)
 
-        n2 = self.n2(c2 + c1)
+        n2 = self.n2(c2)
         a2 = self.a2(n2)
         c3 = self.c3(a2)
 
-        n3 = self.n3(c3 + c2 + c1)
+        n3 = self.n3(c3)
         a3 = self.a3(n3)
         c4 = self.c4(a3)
 
-        n4 = self.n4(c4 + c3 + c2 + c1)
+        n4 = self.n4(c4)
         a4 = self.a4(n4)
         c5 = self.c5(a4)
 
-        c6 = self.c6(c5 + c4 + c3 + c2 + c1)
+        c6 = self.c6(c5)
+
+        if self.residual_layer: c6 = c6 + tensor
 
         return c6
 
@@ -311,51 +312,51 @@ class DCSRN(nn.Module):
         super().__init__()
         self.dimensions = dimensions
 
-        self.c1 = self.conv_layer(1, 2000)
-        self.n1 = self.norm_layer(2000)
+        self.c1 = self.conv_layer(1, 48)
+
+        self.n1 = self.norm_layer(48)
         self.a1 = self.act_fn(fn)
+        self.c2 = self.conv_layer(48, 48)
 
-        self.c2 = self.conv_layer(2000, 48)
-        self.n2 = self.norm_layer(2048)
+        self.n2 = self.norm_layer(48 + 48)
         self.a2 = self.act_fn(fn)
+        self.c3 = self.conv_layer(48 + 48, 72)
 
-        self.c3 = self.conv_layer(2048, 72)
-        self.n3 = self.norm_layer(2120)
+        self.n3 = self.norm_layer(48 + 48 + 72)
         self.a3 = self.act_fn(fn)
+        self.c4 = self.conv_layer(48 + 48 + 72, 96)
 
-        self.c4 = self.conv_layer(2120, 96)
-        self.n4 = self.norm_layer(2216)
+        self.n4 = self.norm_layer(48 + 48 + 72 + 96)
         self.a4 = self.act_fn(fn)
+        self.c5 = self.conv_layer(48 + 48 + 72 + 96, 120)
 
-        self.c5 = self.conv_layer(2216, 120)
-
-        self.c6 = self.conv_layer(2336, 1)
+        self.c6 = self.conv_layer(48 + 48 + 72 + 96 + 120, 1)
 
     def forward(self, tensor):
         CAT_AXIS = 1
-        c1 = self.c1(tensor) # 64, 2000, x0
+        c1 = self.c1(tensor)
 
-        c2 = self.n1(c1) # 64, 2000
-        c2 = self.a1(c2) # 64, 2000
-        c2 = self.c2(c2) # 64, 48, x1
+        c2 = self.n1(c1)
+        c2 = self.a1(c2)
+        c2 = self.c2(c2)
 
-        concat1 = torch.concat([c1, c2], CAT_AXIS) # 2048
-        c3 = self.n2(concat1) # 64, 48
-        c3 = self.a2(c3) # 64, 48
-        c3 = self.c3(c3) # 64, 72, x2
+        concat1 = torch.concat([c1, c2], CAT_AXIS) # 96
+        c3 = self.n2(concat1)
+        c3 = self.a2(c3)
+        c3 = self.c3(c3)
 
-        concat2 = torch.concat([c1, c2, c3], CAT_AXIS) # 2120
-        c4 = self.n3(concat2) # 64, 72
-        c4 = self.a3(c4) # 64, 72
-        c4 = self.c4(c4) # 64, 96, x3
+        concat2 = torch.concat([c1, c2, c3], CAT_AXIS) # 168
+        c4 = self.n3(concat2)
+        c4 = self.a3(c4)
+        c4 = self.c4(c4)
 
-        concat3 = torch.concat([c1, c2, c3, c4], CAT_AXIS) # 2216
-        c5 = self.n4(concat3) # 64, 96
-        c5 = self.a4(c5) # 64, 96
-        c5 = self.c5(c5) # 64, 120, x4
+        concat3 = torch.concat([c1, c2, c3, c4], CAT_AXIS) # 264
+        c5 = self.n4(concat3)
+        c5 = self.a4(c5)
+        c5 = self.c5(c5)
 
-        concat4 = torch.concat([c1, c2, c3, c4, c5], CAT_AXIS) # 2336
-        c6 = self.c6(concat4) # 64, 1
+        concat4 = torch.concat([c1, c2, c3, c4, c5], CAT_AXIS) # 384
+        c6 = self.c6(concat4)
 
         return c6
 
