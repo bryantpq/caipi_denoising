@@ -49,7 +49,7 @@ def main():
                     subj_id = subj_id.split('-')
                     if len(subj_id) == 2: subj_id = subj_id[0] + '-V1'
                     elif len(subj_id) == 3: subj_id = subj_id[0] + '-V1-2'
-                elif 'rNC' in subj_id:
+                elif 'rNC' in subj_id or 'r1x2' in subj_id or 'r1x3' in subj_id or 'r2x2' in subj_id:
                     subj_id = '_'.join(subj_id.split('_')[:-2]) # 1_02_030-V1_rNC_m1x2Warped.npy
                 else:
                     raise NotImplementedError(f'Unrecognized filename: {subj_id}')

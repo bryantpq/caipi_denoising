@@ -15,7 +15,7 @@ from tqdm import tqdm
 from modeling.torch_models import get_model
 from preparation.data_io import write_data
 from preparation.preprocessing_pipeline import rescale_complex, rescale_magnitude, magphase2complex
-from preparation.preprocessing_pipeline import pad_square, remove_padding
+from preparation.preprocessing_pipeline import pad_square, remove_padding, pad_to_64, unpad_from_64
 
 N_HIDDEN_LAYERS = 12
 
@@ -34,12 +34,21 @@ def main():
     model = torch.nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))
     model = model.to(device)
 
-    out_suffix = f'{model_type}{args.dimensions}D' # cdncnn3D
-
     # load data
     print(f'Loading {args.input}')
     src_data = nib.load(args.input)
+    print(f'Input shape: {src_data.shape}')
+
+    # setup dir
+    out_dir = '/'.join(args.output.split('/')[:-1])
+    os.makedirs(out_dir, exist_ok=True)
+
     data = np.array(src_data.dataobj)
+
+    if args.axis != np.argmin(data.shape):
+        print(f'args.axis does not match smallest dimension: {args.axis} != {np.argmin(data.shape)}')
+        args.axis = int(input(f'Please specify which dimension to use for data.shape: {data.shape}\n'))
+
     data = rescale_magnitude(data)
     if args.phase:
         print(f'Loading {args.phase}')
@@ -57,14 +66,15 @@ def main():
 
     # prediction stage
     if args.extract_patches:
+        args_axis_orig_dim = data.shape[args.axis]
+        data = pad_to_64(data, args.axis)
+
         patch_start_time = datetime.datetime.now()
         patch_size, extract_step = args.input_size, args.extract_step
         if args.dimensions == 2:
             if len(patch_size)   == 2: patch_size = patch_size + [1]
             if len(extract_step) == 2: extract_step = extract_step + [1]
         
-        # TODO
-        # Pad to multiple of 64
         patches = patchify(data, patch_size, extract_step)
         before_patches = np.copy(patches)
         patches_shape = patches.shape
@@ -80,7 +90,7 @@ def main():
 
         # run prediction
         patches_out = []
-        for patches_batch in tqdm(patches_loader):
+        for patches_batch in tqdm(patches_loader, ncols=100):
             patches_batch = patches_batch[0].to(device)
             res = model(
                     patches_batch
@@ -94,6 +104,9 @@ def main():
         patches = np.squeeze(patches_out)
         patches = patches.reshape(patches_shape)
         output = unpatchify(patches, data.shape)
+
+        output = unpad_from_64(output, args.axis, args_axis_orig_dim)
+        assert data.shape == output.shape
     else:
         # data.shape 384, 384, 256
         data = np.moveaxis(data, -1, 0) # 256, 384, 384
@@ -107,7 +120,7 @@ def main():
 
         # run prediction
         data_out = []
-        for data_batch in tqdm(data_loader):
+        for data_batch in tqdm(data_loader, ncols=100):
             data_batch = data_batch[0].to(device)
             res = model(
                     data_batch
@@ -138,15 +151,22 @@ def main():
         mag, pha = np.abs(output), np.angle(output)
         nii_mag = nib.Nifti1Image(mag, affine=src_data.affine, header=src_data.header)
         nii_pha = nib.Nifti1Image(pha, affine=src_data.affine, header=src_data.header)
-        out_name_mag = args.input.split('.')[0] + '_' + out_suffix + '.nii.gz'
-        out_name_pha = args.phase.split('.')[0] + '_' + out_suffix + '.nii.gz'
+        if args.output:
+            out_name_mag = args.output
+            out_name_pha = args.output.split('.')[0] + '_pha' + '.nii.gz'
+        else:
+            out_name_mag = args.input.split('.')[0] + '_' + '.nii.gz'
+            out_name_pha = args.phase.split('.')[0] + '_' + '.nii.gz'
         nib.save(nii_mag, out_name_mag)
         nib.save(nii_pha, out_name_pha)
         print(f' Saving: {out_name_mag}')
         print(f' Saving: {out_name_pha}')
     else:
         nii = nib.Nifti1Image(output, affine=src_data.affine, header=src_data.header)
-        out_name= args.input.split('.')[0] + '_' + out_suffix + '.nii.gz'
+        if args.output:
+            out_name = args.output
+        else:
+            out_name = args.input.split('.')[0] + '_' + '.nii.gz'
         nib.save(nii, out_name)
         print(f' Saving: {out_name}')
     
@@ -159,13 +179,14 @@ def create_parser():
     parser.add_argument('dimensions', type=int, choices=[2, 3])
     parser.add_argument('input')
     parser.add_argument('model')
-    parser.add_argument('-a', '--axis', type=int) # dimension 
+    parser.add_argument('-a', '--axis', type=int, default=2) # dimension 
     parser.add_argument('-b', '--batch_size', type=int)
     parser.add_argument('-e', '--extract_patches', action='store_true')
     parser.add_argument('-i', '--input_size', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('-p', '--phase')
     parser.add_argument('-r', '--residual_layer', action='store_true', default=False)
     parser.add_argument('-s', '--extract_step', nargs='+', type=int, help='[ length width ]')
+    parser.add_argument('-o', '--output')
     parser.add_argument('--rescale', action='store_true')
 
     return parser

@@ -142,6 +142,7 @@ def main(rank, world_size):
                     tb_batch_id,
                     tb_writer,
                     rank,
+                    world_size
             )
             subj_batch_losses.append(avg_loss)
 

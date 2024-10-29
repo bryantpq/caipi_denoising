@@ -39,7 +39,7 @@ def plot3multiplanar(img1, img2, ax=None, sg=None, cr=None, itk_offset=False):
     plot2(img1, img2, slc_i=sg, view='sagittal')
     plot2(img1, img2, slc_i=cr, view='coronal')
 
-def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient=True, vmin=None, vmax=None):
+def plot2(a, b, view='axial', slc_i=154, title=[], img_padding=True, reorient=True, vmin=None, vmax=None, colorbar=False):
     if reorient:
         a = reorient_nifti2npy(a)
         b = reorient_nifti2npy(b)
@@ -56,15 +56,29 @@ def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient
         elif view == 'sagittal':
             a_, b_ = a_[:,:,slc_i], b_[:,:,slc_i]
     
-    axis[0].imshow(a_, cmap='gray', vmin=vmin, vmax=vmax)
-    axis[0].set(xlabel='slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'.format(np.min(a_), np.max(a_), np.mean(a_), np.std(a_)))
-    axis[1].imshow(b_, cmap='gray', vmin=vmin, vmax=vmax)
-    axis[1].set(xlabel='slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'.format(np.min(b_), np.max(b_), np.mean(b_), np.std(b_)))
+    slc_str = 'slc min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'
+    vol_str = 'vol min: {:.3f}, max: {:.3f}, mean: {:.3f}, std: {:.3f}'
+
+    _ = axis[0].imshow(a_, cmap='gray', vmin=vmin, vmax=vmax)
+    axis[0].set(xlabel=
+            slc_str.format(np.min(a_), np.max(a_), np.mean(a_), np.std(a_)) + '\n' +
+            vol_str.format(np.min(a), np.max(a), np.mean(a), np.std(a)) 
+    )
+
+    __ = axis[1].imshow(b_, cmap='gray', vmin=vmin, vmax=vmax)
+    axis[1].set(xlabel=
+            slc_str.format(np.min(b_), np.max(b_), np.mean(b_), np.std(b_)) + '\n' +
+            vol_str.format(np.min(b), np.max(b), np.mean(b), np.std(b)) 
+    )
+
+    if colorbar:
+        figure.colorbar(_, orientation="horizontal")
+        figure.colorbar(__, orientation="horizontal")
     
     if type(title) == list and len(title) > 0:
         axis[0].set_title(title[0])
         axis[1].set_title(title[1])
-    else:
+    elif title != []:
         axis[0].set_title(title)
         axis[1].set_title(title)
         
@@ -73,7 +87,6 @@ def plot2(a, b, view='sagittal', slc_i=124, title=[], img_padding=True, reorient
         axis[1].axis('off')
         plt.subplots_adjust(0,0,1,1)
         plt.tight_layout(pad=0.00)
-    
 
 def plot4(a, view='sagittal', title=None, slc_i=124, reorient=False):
     figure, axis = plt.subplots(1, 4, figsize=(30, 20))

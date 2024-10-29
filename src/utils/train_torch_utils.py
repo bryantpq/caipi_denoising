@@ -43,7 +43,7 @@ def setup_paths(config_name, load_train_state):
 
     return writer, save_path
 
-def train_one_epoch(model, loss_fn, optimizer, train_loader, epoch, tb_batch_id, tb_writer, rank, world_size=4):
+def train_one_epoch(model, loss_fn, optimizer, train_loader, epoch, tb_batch_id, tb_writer, rank, world_size):
     last_loss, running_loss, n_batches = 0., 0., len(train_loader)
 
     for i, data in enumerate(train_loader):

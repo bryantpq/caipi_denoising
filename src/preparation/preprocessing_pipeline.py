@@ -6,6 +6,7 @@ import numpy as np
 import pdb
 
 from patchify import patchify
+from skimage.transform import downscale_local_mean
 
 def preprocess_data(data, params, steps, subj_i=None):
     '''
@@ -47,6 +48,9 @@ def gen_pipeline(steps):
 
             elif step == 'denoise':
                 pipeline.append( (denoise, step) )
+
+            elif step == 'downscale':
+                pipeline.append( (downscale, step) )
 
             elif step in ['fourier_transform', 'ft']:
                 pipeline.append( (fourier_transform, step) )
@@ -92,7 +96,7 @@ Preprocessing Operations
 def denoise(
         data,
         method, 
-        sigma_psd=0.035,
+        sigma_psd=0.030,
         h=6.5, templateWindowSize=7, searchWindowSize=21,
     ):
     '''
@@ -130,6 +134,16 @@ def denoise(
         denoised = rescale_magnitude(denoised.astype('float32'), 0, 1)
 
     return denoised
+
+def downscale(data, kernel_size=2):
+    if type(kernel_size) == list:
+        pass
+    elif data.ndim in [2, 3]:
+        kernel_size = (kernel_size, ) * data.ndim
+
+    downsampled_image = downscale_local_mean(image, kernel_size) 
+
+    return downsampled_image
 
 def extract_patches(data, dimensions=2, patch_size=[128,128,128], extract_step=[32,32,32]):
     assert dimensions == len(extract_step)
@@ -235,6 +249,55 @@ def pad_square_v2(data, pad_value=0.0):
     )
 
     logging.debug(f'    After: {data.shape}')
+
+    return data
+
+def unpad_from_64(data, dim, original):
+    if original % 64 == 0: return data
+
+    to_remove = data.shape[dim] - original
+    assert to_remove > 0
+
+    if to_remove % 2 == 1:
+        pad_1, pad_2 = to_remove // 2, to_remove // 2 + 1
+    else:
+        pad_1, pad_2 = to_remove // 2, to_remove // 2
+
+    tmp = np.copy(data)
+    slices = []
+    for i in range(data.ndim):
+        if i == dim:
+            slices.append( slice(pad_1, pad_2, 0) )
+        else:
+            slices.append( slice(0, data.shape[i], 0) )
+
+    tmp = tmp[slices]
+    assert tmp.shape[dim] == original
+
+    return tmp
+
+def pad_to_64(data, dim):
+    if data.shape[dim] % 64 == 0: return data
+
+    to_pad = 64 - data.shape[dim] % 64
+
+    if to_pad % 2 == 1:
+        pad_1, pad_2 = to_pad // 2, to_pad // 2 + 1
+    else:
+        pad_1, pad_2 = to_pad // 2, to_pad // 2
+
+    pad_list = []
+    for i, shape in enumerate(data.shape):
+        if i == dim:
+            pad_list.append( (pad_1, pad_2) )
+        else:
+            pad_list.append( (0, 0) )
+
+    data = np.pad(
+            data,
+            pad_list,
+            constant_values=0.0
+    )
 
     return data
 
@@ -346,10 +409,13 @@ def threshold_intensities(data, value=5000):
 
     return data
 
-def white_noise(data_slices, mu=0.0, sigma=0.2):
+def __white_noise(data_slices, mu=0.0, sigma=0.2, complex_max='realimag'):
     '''
     Adds a different level of noise to each slice
     '''
+    assert complex_max in ['realimag', 'magpha']
+
+    data_slices = np.copy(data_slices)
 
     for slc_i in range(data_slices.shape[-1]):
         data = data_slices[:,:,slc_i]
@@ -357,16 +423,46 @@ def white_noise(data_slices, mu=0.0, sigma=0.2):
         else: sigma_ = sigma
 
         if np.iscomplexobj(data):
-            max_real, max_imag = np.max(np.real(data)), np.max(np.imag(data))
-            real_noise_map = np.random.normal(mu, sigma_ * max_real, data.shape)
-            imag_noise_map = 1j * np.random.normal(mu, sigma_ * max_imag, data.shape)
-            data_slices[:,:,slc_i] = data + real_noise_map + imag_noise_map
+            if complex_max == 'realimag':
+                max_real, max_imag = np.max(np.real(data)), np.max(np.imag(data))
+                real_noise_map = np.random.normal(mu, sigma_ * max_real, data.shape)
+                imag_noise_map = 1j * np.random.normal(mu, sigma_ * max_imag, data.shape)
+                data_slices[:,:,slc_i] = data + real_noise_map + imag_noise_map
         else:
             max_ = np.max(data)
             noise_map = np.random.normal(mu, sigma_ * max_, data.shape)
             data_slices[:,:,slc_i] = data + noise_map
 
     return data_slices
+
+def white_noise(data_, complex_max='magpha', mu=0.0, sigma=0.2):
+    assert complex_max in ['realimag', 'magpha']
+
+    data = np.copy(data_)
+    if type(sigma) == list: sigma_ = np.random.choice(sigma)
+    else: sigma_ = sigma
+
+    if np.iscomplexobj(data):
+        if complex_max == 'magpha':
+            mag, pha = np.abs(data), np.angle(data)
+            max_mag, max_pha = np.max(mag), np.max(pha)
+            mag_noise_map = np.random.normal(mu, sigma_ * max_mag, data.shape)
+            pha_noise_map = np.random.normal(mu, sigma_ * max_pha, data.shape)
+            mag = mag + mag_noise_map
+            pha = pha + pha_noise_map
+            data = magphase2complex(mag, pha, rescale=True)
+
+        elif complex_max == 'realimag':
+            max_real, max_imag = np.max(np.real(data)), np.max(np.imag(data))
+            real_noise_map = np.random.normal(mu, sigma_ * max_real, data.shape)
+            imag_noise_map = 1j * np.random.normal(mu, sigma_ * max_imag, data.shape)
+            data = data + real_noise_map + imag_noise_map
+    else:
+        max_ = np.max(data)
+        noise_map = np.random.normal(mu, sigma_ * max_, data.shape)
+        data = data + noise_map
+
+    return data
 
 def low_pass_filter(img, window_size=[280,280,184]):
     assert np.iscomplexobj(img)
