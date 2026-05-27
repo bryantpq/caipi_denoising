@@ -1,6 +1,5 @@
 import argparse
 import datetime
-import logging
 import nibabel as nib
 import numpy as np
 import os
@@ -26,8 +25,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_type = '_'.join(args.model.split('/')[-1].split('_')[:-1])
 
-    logging.info(f'Model {model_type}: {args.model}')
-    logging.info(f'Residual layer: {args.residual_layer}')
+    print(f'Model {model_type}: {args.model}')
+    print(f'Residual layer: {args.residual_layer}')
     model = get_model(model_type, args.dimensions, N_HIDDEN_LAYERS, args.residual_layer)
     model.load_state_dict(torch.load(args.model, map_location='cpu'))
     model.eval()
@@ -47,7 +46,7 @@ def main():
 
     if args.axis != np.argmin(data.shape):
         print(f'args.axis does not match smallest dimension: {args.axis} != {np.argmin(data.shape)}')
-        args.axis = int(input(f'Please specify which dimension to use for data.shape: {data.shape}\n'))
+        args.axis = int(input(f'Please specify which dimension to use for data.shape: {data.shape}\n>>> '))
 
     data = rescale_magnitude(data)
     if args.phase:
@@ -66,6 +65,7 @@ def main():
 
     # prediction stage
     if args.extract_patches:
+        print('Extracting patches from data ...')
         args_axis_orig_dim = data.shape[args.axis]
         data = pad_to_64(data, args.axis)
 
@@ -89,6 +89,7 @@ def main():
         patches_loader = DataLoader(patches, batch_size=args.batch_size)
 
         # run prediction
+        print('Running prediction ...')
         patches_out = []
         for patches_batch in tqdm(patches_loader, ncols=100):
             patches_batch = patches_batch[0].to(device)
@@ -175,16 +176,16 @@ def main():
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    example_str = 'python predict_torch.py 2 mag.nii.gz -p pha.nii.gz /home/quahb/caipi_denoising/models/compleximage_3d_patches64_fold5_2024-04-07/cdncnn_ep50.pt --input_size 64 64 64 --extract_patches --extract_step 32 32 32 --batch_size 16'
+    example_str = 'python denoise.py 2 mag.nii.gz -p pha.nii.gz /home/quahb/caipi_denoising/models/compleximage_3d_patches64_fold5_2024-04-07/cdncnn_ep50.pt --input_size 64 64 64 --extract_patches --extract_step 32 32 32 --batch_size 16'
     parser.add_argument('dimensions', type=int, choices=[2, 3])
     parser.add_argument('input')
     parser.add_argument('model')
     parser.add_argument('-a', '--axis', type=int, default=2) # dimension 
+    parser.add_argument('-p', '--phase')
     parser.add_argument('-b', '--batch_size', type=int)
     parser.add_argument('-e', '--extract_patches', action='store_true')
     parser.add_argument('-i', '--input_size', nargs='+', type=int, help='[ length width ]')
-    parser.add_argument('-p', '--phase')
-    parser.add_argument('-r', '--residual_layer', action='store_true', default=False)
+    parser.add_argument('-r', '--residual_layer', action='store_false', default=True)
     parser.add_argument('-s', '--extract_step', nargs='+', type=int, help='[ length width ]')
     parser.add_argument('-o', '--output')
     parser.add_argument('--rescale', action='store_true')

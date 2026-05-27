@@ -3,11 +3,14 @@ import logging
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import raster_geometry as rg
 import pdb
 
 from skimage.metrics import peak_signal_noise_ratio as sk_psnr
 from skimage.metrics import structural_similarity as ssim
 from sklearn.metrics import mean_squared_error as sk_mse
+from sklearn.metrics import mean_absolute_error as sk_mae
+
 
 SUBJ_RESTRICT_RANGE = {
         '1_01_024-V1': (75, 384),
@@ -91,6 +94,12 @@ def compute_metrics(reference, before, after, vein_mask, wm_mask, lesion_mask,
     #before_metrics['cnr_lv']    = cnr(before, vein_mask, lesion_mask)
     #before_metrics['cnr_lw']    = cnr(before, wm_mask, lesion_mask)
 
+def create_sphere(rad):
+    #arr = rg.sphere((312, 384, 256), rad, [0.5, 0.375, 0.5])
+    arr = rg.sphere((312, 384, 256), rad, [0.53, 0.31, 0.5])
+    
+    return arr.astype(np.int16)
+
 def snr(data, mask=None, fn=np.mean):
     '''
     Given an image, compute the SNR for the image.
@@ -112,7 +121,7 @@ def snr(data, mask=None, fn=np.mean):
     else:
         return mu / sd
 
-def psnr(y, mask=None, subj_id=None, acceleration=None):
+def axial_psnr(y, mask=None, subj_id=None, acceleration=None, cylinder=False):
     '''
     Given a data volume and mask for a region of interest (white matter),
     create a cylinder through the axial plane and calculate the snr for regions
@@ -131,6 +140,7 @@ def psnr(y, mask=None, subj_id=None, acceleration=None):
     pre_masked_snrs  = np.array([ -1 for i in range(0, START) ])
     post_masked_snrs = np.array([ -1 for i in range(END, 384) ])
 
+    if cylinder: mask = mask_intersect_cylinder(mask)
     slice_snr = np.array([ snr( y[:,ii,:], mask[:,ii,:], fn=np.max ) for ii in range(START, END) ])
 
     slice_snr = np.append(pre_masked_snrs, slice_snr)
@@ -150,7 +160,7 @@ def psnr(y, mask=None, subj_id=None, acceleration=None):
 
     return max_snr
 
-def msnr(y, mask=None, subj_id=None):
+def msnr(y, mask=None, subj_id=None, cylinder=False):
     '''
     sum( {axial slice snr's} ) / Number of axial slices
     '''
@@ -166,6 +176,7 @@ def msnr(y, mask=None, subj_id=None):
     pre_masked_snrs  = np.array([ -1 for i in range(0, START) ])
     post_masked_snrs = np.array([ -1 for i in range(END, 384) ])
 
+    if cylinder: mask = mask_intersect_cylinder(mask)
     slice_snr = np.array([ snr( y[:,ii,:], mask[:,ii,:], fn=np.mean ) for ii in range(START, END) ])
 
     slice_snr = np.append(pre_masked_snrs, slice_snr)
@@ -186,7 +197,6 @@ def msnr(y, mask=None, subj_id=None):
 def erode_mask(img, kernel_size=5):
     kernel = (kernel_size, ) * img.ndim
     kernel = np.ones(kernel, np.uint8)
-    pdb.set_trace()
     img_erode = cv2.erode(img, kernel, iterations=1)
 
     return img_erode
@@ -269,18 +279,36 @@ def structure(X, y):
 
     return num / den
 
-def my_psnr(X, y, data_range=1):
-    data_range = 1.0
-    err = complex_mse(X, y)
+def mse(x, y):
+    return np.mean( np.abs( (x - y)**2) )
 
-    return 10 * math.log10(data_range / np.sqrt(err))
+def nrmse(x, y):
+    num = mse(x, y)
+    den = np.mean(x**2)
 
-def complex_mse(x, y):
-    return np.mean(np.abs(x - y)**2)
+    res = np.sqrt(num / den)
 
-def complex_psnr(x, y):
-    err = complex_mse(x, y)
+    res = np.abs(res) # take abs if its complex
+
+    return res
+
+def psnr(a_, b_, rad=None, data_range=None):
+    if rad is not None:
+        sphere = create_sphere(rad=rad)
+        a_sphere = np.copy(a_)
+        a_sphere[np.where(sphere == 1)] = 1
+
+        a = a_[np.where(sphere == 1)]
+        b = b_[np.where(sphere == 1)]
+    else:
+        a = a_
+        b = b_
     
-    data_range = np.abs( (np.complex(0, -np.pi) - np.complex(1, np.pi))**2 )
+    if data_range is None: data_range = np.abs(np.max(a)) + np.abs(np.min(b))
 
-    return 10 * np.log10((data_range) / np.sqrt(err))
+    if np.iscomplexobj(a):
+        res = 20 * np.log10( (data_range) / np.sqrt(mse(a, b)) )
+    else:
+        res = sk_psnr(a, b, data_range=data_range)
+    
+    return res

@@ -22,7 +22,6 @@ from preparation.preprocessing_pipeline import rescale_magnitude
 from utils.create_logger import create_logger
 from utils.torch_train_utils import batch_loss, get_data_gen, setup_paths
 
-
 def main(rank, world_size):
     ddp_setup(rank, world_size)
     parser = create_parser()

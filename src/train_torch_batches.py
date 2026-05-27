@@ -23,7 +23,7 @@ from utils.train_torch_utils import batch_loss, get_data_gen, train_one_epoch, s
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-RUN_VALIDATION = True
+RUN_VALIDATION = False
 
 def main(rank, world_size):
     ddp_setup(rank, world_size)

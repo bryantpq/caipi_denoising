@@ -435,7 +435,7 @@ def __white_noise(data_slices, mu=0.0, sigma=0.2, complex_max='realimag'):
 
     return data_slices
 
-def white_noise(data_, complex_max='magpha', mu=0.0, sigma=0.2):
+def white_noise(data_, complex_max='realimag', mu=0.0, sigma=0.2):
     assert complex_max in ['realimag', 'magpha']
 
     data = np.copy(data_)

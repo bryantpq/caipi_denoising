@@ -212,10 +212,6 @@ def build_model(
         temb = layers.Add()([iemb, temb])
 
     skips = [x]
-    print('widths')
-    print(widths)
-    print('attention')
-    print(has_attention)
 
     # DownBlock
     for i in range(len(widths)):
